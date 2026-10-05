@@ -3,12 +3,10 @@ package main
 import (
 	"fmt"
 	"net/http"
-
-	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/bootstrap"
 )
 
 func main() {
-	_ = bootstrap.Start()
+	// _ = bootstrap.Start()
 
 	fmt.Println("Control plane server listening on :8080")
 
