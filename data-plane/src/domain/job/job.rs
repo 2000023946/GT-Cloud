@@ -7,6 +7,7 @@ use crate::domain::resource::Resource;
 pub struct Job {
     pub id: String,
     pub app: App,
+    pub name: String,
     pub status: JobStatus,
     pub resources: Resource,
     pub network: Vec<NetworkRule>,

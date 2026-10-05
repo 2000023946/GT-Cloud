@@ -19,4 +19,8 @@ impl ControlPlaneClient for ControlPlaneClientService {
         println!("ControlPlaneClient: ReportJobStatus {}", job.id);
         Ok(())
     }
+    
+    fn report_endpoint(&self, endpoint: crate::domain::endpoint::Endpoint) -> Result<(), String> {
+        Ok(())
+    }
 }

@@ -19,4 +19,8 @@ impl NetworkManager for NetworkManagerService {
         println!("NetworkManager: Cleanup {}", job.id);
         Ok(())
     }
+    
+    fn monitor(&self, job: Job) -> Result<(), String> {
+        Ok(())
+    }
 }

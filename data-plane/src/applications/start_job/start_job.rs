@@ -33,9 +33,6 @@ where
     }
 
     pub fn start(&self, job: Job) -> Result<(), String> {
-        self.resource_manager.allocate(job.clone())?;
-        self.network_manager.configure(job.clone())?;
-        self.runtime.start(job)?;
 
         Ok(())
     }

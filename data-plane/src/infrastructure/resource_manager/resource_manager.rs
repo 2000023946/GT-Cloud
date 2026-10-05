@@ -10,13 +10,15 @@ impl ResourceManagerService {
 }
 
 impl ResourceManager for ResourceManagerService {
-    fn allocate(&self, job: Job) -> Result<(), String> {
-        println!("ResourceManager: Allocate {}", job.id);
-        Ok(())
+    fn configure(&self, job: Job) -> Result<(), String> {
+        todo!()
     }
-
-    fn release(&self, job: Job) -> Result<(), String> {
-        println!("ResourceManager: Release {}", job.id);
-        Ok(())
+    
+    fn monitor(&self, job: Job) -> Result<(), String> {
+        todo!()
+    }
+    
+    fn cleanup(&self, job: Job) -> Result<(), String> {
+        todo!()
     }
 }

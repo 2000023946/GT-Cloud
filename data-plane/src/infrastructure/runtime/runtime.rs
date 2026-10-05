@@ -19,4 +19,16 @@ impl Runtime for RuntimeService {
         println!("Runtime: StopJob {}", job.id);
         Ok(())
     }
+    
+    fn configure(&self, job: Job) -> Result<(), String> {
+        Ok(())
+    }
+    
+    fn monitor(&self, job: Job) -> Result<(), String> {
+        Ok(())
+    }
+    
+    fn cleanup(&self, job: Job) -> Result<(), String> {
+        todo!()
+    }
 }

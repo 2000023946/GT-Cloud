@@ -1,6 +1,9 @@
 use crate::domain::job::Job;
 
 pub trait ResourceManager {
-    fn allocate(&self, job: Job) -> Result<(), String>;
-    fn release(&self, job: Job) -> Result<(), String>;
+    fn configure(&self, job: Job) -> Result<(), String>;
+
+    fn monitor(&self, job: Job) -> Result<(), String>;
+
+    fn cleanup(&self, job: Job) -> Result<(), String>;
 }

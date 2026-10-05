@@ -4,3 +4,4 @@ pub mod metrics;
 pub mod network_manager;
 pub mod resource_manager;
 pub mod runtime;
+pub mod code_parser;

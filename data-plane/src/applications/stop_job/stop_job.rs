@@ -33,9 +33,6 @@ where
     }
 
     pub fn stop(&self, job: Job) -> Result<(), String> {
-        self.runtime.stop(job.clone())?;
-        self.network_manager.cleanup(job.clone())?;
-        self.resource_manager.release(job)?;
 
         Ok(())
     }
