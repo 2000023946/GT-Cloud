@@ -20,7 +20,7 @@ impl NetworkManager for NetworkManagerService {
         Ok(())
     }
     
-    fn monitor(&self, job: Job) -> Result<(), String> {
+    fn monitor(&self, _job: Job) -> Result<(), String> {
         Ok(())
     }
 }

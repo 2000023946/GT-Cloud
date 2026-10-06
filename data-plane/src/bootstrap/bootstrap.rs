@@ -20,7 +20,7 @@ pub fn start() -> API<
     let runtime = RuntimeService::new();
     let resource_manager = ResourceManagerService::new();
     let network_manager = NetworkManagerService::new();
-    let control_plane_client = ControlPlaneClientService::new();
+    let _control_plane_client = ControlPlaneClientService::new();
 
     // Applications
     let start_job = StartJobService::new(

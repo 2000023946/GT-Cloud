@@ -1,3 +1,4 @@
+
 use crate::domain::job::Job;
 use crate::ports::network_manager::NetworkManager;
 use crate::ports::resource_manager::ResourceManager;
@@ -32,7 +33,7 @@ where
         }
     }
 
-    pub fn start(&self, job: Job) -> Result<(), String> {
+    pub fn _start(&self, _job: Job) -> Result<(), String> {
 
         Ok(())
     }

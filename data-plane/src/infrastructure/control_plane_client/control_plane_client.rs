@@ -20,7 +20,7 @@ impl ControlPlaneClient for ControlPlaneClientService {
         Ok(())
     }
     
-    fn report_endpoint(&self, endpoint: crate::domain::endpoint::Endpoint) -> Result<(), String> {
+    fn report_endpoint(&self, _endpoint: crate::domain::endpoint::Endpoint) -> Result<(), String> {
         Ok(())
     }
 }

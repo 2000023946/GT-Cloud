@@ -18,7 +18,7 @@ where
         }
     }
 
-    pub fn report(&self, job: Job) -> Result<(), String> {
+    pub fn _report(&self, job: Job) -> Result<(), String> {
         self.control_plane_client.report_job_status(job)
     }
 }

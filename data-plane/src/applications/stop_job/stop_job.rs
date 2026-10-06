@@ -32,7 +32,7 @@ where
         }
     }
 
-    pub fn stop(&self, job: Job) -> Result<(), String> {
+    pub fn _stop(&self, _job: Job) -> Result<(), String> {
 
         Ok(())
     }

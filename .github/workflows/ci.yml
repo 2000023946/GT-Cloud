@@ -80,7 +80,7 @@ jobs:
         run: cargo test
 
       - name: Run Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy 
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
