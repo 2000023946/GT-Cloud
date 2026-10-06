@@ -34,11 +34,8 @@ jobs:
       - name: Build
         run: go build ./...
 
-      - name: Test
+      - name: Run tests
         run: go test ./...
-
-      - name: Install coverage tool
-        run: go install github.com/axw/gocov@latest
 
       - name: Generate coverage
         run: go test ./... -coverprofile=coverage.out
@@ -46,6 +43,7 @@ jobs:
       - name: Check coverage
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+
           echo "Control Plane coverage: ${COVERAGE}%"
 
           if awk "BEGIN {exit !($COVERAGE < 95)}"; then
@@ -80,7 +78,7 @@ jobs:
         run: cargo test
 
       - name: Run Clippy
-        run: cargo clippy 
+        run: cargo clippy
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
