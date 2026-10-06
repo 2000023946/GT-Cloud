@@ -1,0 +1,4 @@
+mode: set
+github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/action/create_replica_action.go:8.40,8.41 0 0
+github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/action/stop_replica_action.go:7.38,7.39 0 0
+github.gatech.edu/mabucar3/GT-Cloud/control-plane/cmd/main/main.go:8.13,14.2 2 0
