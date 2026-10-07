@@ -1,1 +1,2 @@
 data-plane/target/*
+control-plane/coverage.out
