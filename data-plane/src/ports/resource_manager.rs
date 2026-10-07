@@ -6,4 +6,4 @@ pub trait ResourceManager {
     fn monitor(&self, job: Job) -> Result<(), String>;
 
     fn cleanup(&self, job: Job) -> Result<(), String>;
-}
+}// this is resource
