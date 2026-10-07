@@ -1,14 +1,15 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 )
 
+var listenAndServe = http.ListenAndServe
+
+func startServer(addr string) error {
+	return listenAndServe(addr, nil)
+}
+
 func main() {
-	// _ = bootstrap.Start()
-
-	fmt.Println("Control plane server listening on :8080")
-
-	http.ListenAndServe(":8080", nil)
+	_ = startServer(":8080")
 }

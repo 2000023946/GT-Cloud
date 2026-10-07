@@ -4,17 +4,3 @@ pub struct Endpoint {
     pub address: String,
     pub port: u16,
 }
-
-impl Endpoint {
-    pub fn new(
-        replica_id: String,
-        address: String,
-        port: u16,
-    ) -> Self {
-        Self {
-            replica_id,
-            address,
-            port,
-        }
-    }
-}
