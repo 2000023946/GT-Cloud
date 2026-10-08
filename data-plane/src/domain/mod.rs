@@ -3,3 +3,7 @@ pub mod job;
 pub mod network;
 pub mod resource;
 pub mod endpoint;
+pub mod resource_state;
+pub mod job_state;
+pub mod runtime_state;
+pub mod network_state;
