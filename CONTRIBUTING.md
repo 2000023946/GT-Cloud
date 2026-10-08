@@ -33,3 +33,4 @@ When applicable:
 * [ ] End-to-end tests
 
 A component is not considered complete when only its implementation is finished. Its tests, observability, documentation, and required integration work must also be complete.
+
