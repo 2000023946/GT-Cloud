@@ -1,7 +1,10 @@
 use crate::domain::job::Job;
 use crate::infrastructure::runtime::state::{ProcessState, RuntimeState};
+use crate::infrastructure::runtime::working_directory::WorkingDirectoryManager;
 
-pub struct ConfigureRuntime;
+pub struct ConfigureRuntime {
+    working_directory_manager: WorkingDirectoryManager,
+}
 
 impl ConfigureRuntime {
     pub fn configure(
@@ -20,10 +23,14 @@ impl ConfigureRuntime {
             .map(String::from)
             .collect();
 
+        let working_directory = self
+            .working_directory_manager
+            .get_directory(&job.id);
+
         let process_state = ProcessState {
             program,
             args,
-            working_directory: Some(job.app.code_path),
+            working_directory: Some(working_directory),
             environment: job.app.environment,
         };
 

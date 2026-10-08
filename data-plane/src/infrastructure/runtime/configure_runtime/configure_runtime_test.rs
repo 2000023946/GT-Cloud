@@ -5,19 +5,30 @@ mod tests {
     use crate::domain::job::{Job, JobStatus};
     use crate::domain::network::NetworkRule;
     use crate::domain::resource::Resource;
-    use crate::infrastructure::runtime::state::RuntimeState;
+    use crate::infrastructure::runtime::working_directory::WorkingDirectoryManager;
+
+    fn make_manager() -> WorkingDirectoryManager {
+        WorkingDirectoryManager {
+            root: "/jobs".to_string(),
+        }
+    }
+
+    fn make_runtime() -> ConfigureRuntime {
+        ConfigureRuntime {
+            working_directory_manager: make_manager(),
+        }
+    }
 
     fn make_job(
         id: &str,
         command: &str,
-        code_path: &str,
         environment: Vec<(String, String)>,
     ) -> Job {
         Job {
             id: id.to_string(),
             app: App {
                 id: format!("app-{id}"),
-                code_path: code_path.to_string(),
+                code_path: "/some/code/path".to_string(),
                 command: command.to_string(),
                 environment,
             },
@@ -34,13 +45,12 @@ mod tests {
 
     #[test]
     fn configure_stores_process_state() {
-        let runtime = ConfigureRuntime;
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let job = make_job(
             "job-1",
             "python main.py",
-            "/jobs/job-1",
             vec![],
         );
 
@@ -52,42 +62,32 @@ mod tests {
 
         assert_eq!(process.program, "python");
         assert_eq!(process.args, vec!["main.py"]);
-        assert_eq!(
-            process.working_directory,
-            Some("/jobs/job-1".to_string())
-        );
     }
 
     #[test]
-    fn configure_stores_command_arguments() {
-        let runtime = ConfigureRuntime;
+    fn configure_uses_working_directory_manager() {
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let job = make_job(
-            "job-1",
-            "python main.py --port 8080",
-            "/jobs/job-1",
+            "job-123",
+            "python main.py",
             vec![],
         );
 
         runtime.configure(&mut state, job).unwrap();
 
-        let process = state.processes.get("job-1").unwrap();
+        let process = state.processes.get("job-123").unwrap();
 
-        assert_eq!(process.program, "python");
         assert_eq!(
-            process.args,
-            vec![
-                "main.py".to_string(),
-                "--port".to_string(),
-                "8080".to_string()
-            ]
+            process.working_directory,
+            Some("/jobs/job-123".to_string())
         );
     }
 
     #[test]
     fn configure_stores_environment() {
-        let runtime = ConfigureRuntime;
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let environment = vec![
@@ -97,8 +97,7 @@ mod tests {
 
         let job = make_job(
             "job-1",
-            "server",
-            "/jobs/job-1",
+            "python main.py",
             environment.clone(),
         );
 
@@ -110,14 +109,13 @@ mod tests {
     }
 
     #[test]
-    fn configure_stores_working_directory() {
-        let runtime = ConfigureRuntime;
+    fn configure_stores_command_arguments() {
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let job = make_job(
             "job-1",
-            "python main.py",
-            "/jobs/job-1",
+            "python main.py --port 8080",
             vec![],
         );
 
@@ -125,21 +123,45 @@ mod tests {
 
         let process = state.processes.get("job-1").unwrap();
 
+        assert_eq!(process.program, "python");
+
         assert_eq!(
-            process.working_directory,
-            Some("/jobs/job-1".to_string())
+            process.args,
+            vec![
+                "main.py".to_string(),
+                "--port".to_string(),
+                "8080".to_string(),
+            ]
         );
     }
 
     #[test]
+    fn configure_accepts_command_without_arguments() {
+        let runtime = make_runtime();
+        let mut state = make_state();
+
+        let job = make_job(
+            "job-1",
+            "python",
+            vec![],
+        );
+
+        runtime.configure(&mut state, job).unwrap();
+
+        let process = state.processes.get("job-1").unwrap();
+
+        assert_eq!(process.program, "python");
+        assert!(process.args.is_empty());
+    }
+
+    #[test]
     fn configure_rejects_empty_command() {
-        let runtime = ConfigureRuntime;
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let job = make_job(
             "job-1",
             "",
-            "/jobs/job-1",
             vec![],
         );
 
@@ -156,13 +178,12 @@ mod tests {
 
     #[test]
     fn configure_rejects_whitespace_only_command() {
-        let runtime = ConfigureRuntime;
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let job = make_job(
             "job-1",
             "     ",
-            "/jobs/job-1",
             vec![],
         );
 
@@ -178,51 +199,13 @@ mod tests {
     }
 
     #[test]
-    fn configure_accepts_command_without_arguments() {
-        let runtime = ConfigureRuntime;
-        let mut state = make_state();
-
-        let job = make_job(
-            "job-1",
-            "python",
-            "/jobs/job-1",
-            vec![],
-        );
-
-        runtime.configure(&mut state, job).unwrap();
-
-        let process = state.processes.get("job-1").unwrap();
-
-        assert_eq!(process.program, "python");
-        assert!(process.args.is_empty());
-    }
-
-    #[test]
-    fn configure_uses_job_id_as_state_key() {
-        let runtime = ConfigureRuntime;
-        let mut state = make_state();
-
-        let job = make_job(
-            "my-job",
-            "python main.py",
-            "/jobs/my-job",
-            vec![],
-        );
-
-        runtime.configure(&mut state, job).unwrap();
-
-        assert!(state.processes.contains_key("my-job"));
-    }
-
-    #[test]
-    fn configure_replaces_existing_job_with_same_id() {
-        let runtime = ConfigureRuntime;
+    fn configure_replaces_existing_job() {
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let first_job = make_job(
             "job-1",
             "python first.py",
-            "/jobs/first",
             vec![],
         );
 
@@ -231,7 +214,6 @@ mod tests {
         let second_job = make_job(
             "job-1",
             "python second.py",
-            "/jobs/second",
             vec![],
         );
 
@@ -239,32 +221,24 @@ mod tests {
 
         let process = state.processes.get("job-1").unwrap();
 
-        assert_eq!(process.program, "python");
         assert_eq!(process.args, vec!["second.py"]);
-        assert_eq!(
-            process.working_directory,
-            Some("/jobs/second".to_string())
-        );
-
         assert_eq!(state.processes.len(), 1);
     }
 
     #[test]
     fn configure_supports_multiple_jobs() {
-        let runtime = ConfigureRuntime;
+        let runtime = make_runtime();
         let mut state = make_state();
 
         let job1 = make_job(
             "job-1",
             "python app1.py",
-            "/jobs/job-1",
             vec![],
         );
 
         let job2 = make_job(
             "job-2",
             "python app2.py",
-            "/jobs/job-2",
             vec![],
         );
 
