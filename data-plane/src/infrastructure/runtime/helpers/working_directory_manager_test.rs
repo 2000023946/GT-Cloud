@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::infrastructure::runtime::helpers::working_directory_manager::WorkingDirectoryManager;
+
+use super::*;
 
     fn manager() -> WorkingDirectoryManager {
         WorkingDirectoryManager {

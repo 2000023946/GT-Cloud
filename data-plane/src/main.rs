@@ -2,7 +2,7 @@ mod api;
 mod applications;
 mod bootstrap;
 mod domain;
-// mod infrastructure;
+mod infrastructure;
 mod ports;
 
 fn main() {

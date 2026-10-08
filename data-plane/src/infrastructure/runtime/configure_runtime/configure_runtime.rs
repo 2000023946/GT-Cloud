@@ -1,9 +1,7 @@
-use crate::domain::job::Job;
-use crate::infrastructure::runtime::state::{ProcessState, RuntimeState};
-use crate::infrastructure::runtime::working_directory::WorkingDirectoryManager;
-
+use crate::{domain::job::Job, infrastructure::runtime::{helpers::working_directory_manager::WorkingDirectoryManager, states::process_state::ProcessState}};
+use crate::infrastructure::runtime::states::runtime_state::RuntimeState;
 pub struct ConfigureRuntime {
-    working_directory_manager: WorkingDirectoryManager,
+    pub(crate) working_directory_manager: WorkingDirectoryManager,
 }
 
 impl ConfigureRuntime {

@@ -1,5 +1,5 @@
 pub struct WorkingDirectoryManager {
-    root: String,
+    pub(crate) root: String,
 }
 
 impl WorkingDirectoryManager {
