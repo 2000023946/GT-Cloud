@@ -44,9 +44,13 @@ fn make_job(id: usize) -> Job {
     Job {
         id: format!("job-{id}"),
         app: App {
-            id: format!("app-{id}"),
+            id: "app-123".to_string(),
             code_path: "/code".to_string(),
             command: "python app.py".to_string(),
+            environment: vec![
+                ("PORT".to_string(), "8080".to_string()),
+                ("MODE".to_string(), "test".to_string()),
+            ],
         },
         name: format!("test-job-{id}"),
         status: JobStatus::Received,
