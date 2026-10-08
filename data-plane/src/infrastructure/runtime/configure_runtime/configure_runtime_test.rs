@@ -62,22 +62,20 @@ fn make_job(command: &str) -> Job {
 }
 
 fn make_state() -> RuntimeState {
-    RuntimeState {
-        processes: std::collections::HashMap::new(),
-    }
+    RuntimeState::new()
 }
 
 #[test]
 fn configure_valid_command() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
     let job = make_job("python app.py");
 
-    let result = runtime.configure(&mut state, job);
+    let result = runtime.configure(&state, job);
 
     assert!(result.is_ok());
 
-    let process = state.processes.get("job-123").unwrap();
+    let process = state.get_process("job-123").unwrap();
 
     assert_eq!(process.program, "python");
     assert_eq!(process.args, vec!["app.py"]);
@@ -90,14 +88,14 @@ fn configure_valid_command() {
 #[test]
 fn configure_command_with_multiple_arguments() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
     let job = make_job("python app.py --port 8080");
 
-    let result = runtime.configure(&mut state, job);
+    let result = runtime.configure(&state, job);
 
     assert!(result.is_ok());
 
-    let process = state.processes.get("job-123").unwrap();
+    let process = state.get_process("job-123").unwrap();
 
     assert_eq!(process.program, "python");
     assert_eq!(
@@ -109,14 +107,14 @@ fn configure_command_with_multiple_arguments() {
 #[test]
 fn configure_command_without_arguments() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
     let job = make_job("python");
 
-    let result = runtime.configure(&mut state, job);
+    let result = runtime.configure(&state, job);
 
     assert!(result.is_ok());
 
-    let process = state.processes.get("job-123").unwrap();
+    let process = state.get_process("job-123").unwrap();
 
     assert_eq!(process.program, "python");
     assert!(process.args.is_empty());
@@ -125,7 +123,7 @@ fn configure_command_without_arguments() {
 #[test]
 fn configure_sets_environment() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
 
     let mut job = make_job("python app.py");
 
@@ -134,11 +132,11 @@ fn configure_sets_environment() {
         ("MODE".to_string(), "test".to_string()),
     ];
 
-    let result = runtime.configure(&mut state, job);
+    let result = runtime.configure(&state, job);
 
     assert!(result.is_ok());
 
-    let process = state.processes.get("job-123").unwrap();
+    let process = state.get_process("job-123").unwrap();
 
     assert_eq!(
         process.environment,
@@ -152,10 +150,10 @@ fn configure_sets_environment() {
 #[test]
 fn configure_empty_command_fails() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
     let job = make_job("");
 
-    let result = runtime.configure(&mut state, job);
+    let result = runtime.configure(&state, job);
 
     assert!(result.is_err());
 }
@@ -163,10 +161,10 @@ fn configure_empty_command_fails() {
 #[test]
 fn configure_whitespace_command_fails() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
     let job = make_job("   ");
 
-    let result = runtime.configure(&mut state, job);
+    let result = runtime.configure(&state, job);
 
     assert!(result.is_err());
 }
@@ -174,44 +172,44 @@ fn configure_whitespace_command_fails() {
 #[test]
 fn configure_replaces_existing_job() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
 
     let job1 = make_job("python app.py");
-    runtime.configure(&mut state, job1).unwrap();
+    runtime.configure(&state, job1).unwrap();
 
     let job2 = make_job("node server.js");
-    runtime.configure(&mut state, job2).unwrap();
+    runtime.configure(&state, job2).unwrap();
 
-    let process = state.processes.get("job-123").unwrap();
+    let process = state.get_process("job-123").unwrap();
 
     assert_eq!(process.program, "node");
     assert_eq!(process.args, vec!["server.js"]);
 
-    assert_eq!(state.processes.len(), 1);
+    assert_eq!(state.process_count(), 1);
 }
 
 #[test]
 fn configure_multiple_jobs() {
     let runtime = make_runtime();
-    let mut state = make_state();
+    let state = make_state();
 
     let job1 = make_job("python app.py");
 
     let mut job2 = make_job("node server.js");
     job2.id = "job-456".to_string();
 
-    runtime.configure(&mut state, job1).unwrap();
-    runtime.configure(&mut state, job2).unwrap();
+    runtime.configure(&state, job1).unwrap();
+    runtime.configure(&state, job2).unwrap();
 
-    assert_eq!(state.processes.len(), 2);
+    assert_eq!(state.process_count(), 2);
 
     assert_eq!(
-        state.processes.get("job-123").unwrap().program,
+        state.get_process("job-123").unwrap().program,
         "python"
     );
 
     assert_eq!(
-        state.processes.get("job-456").unwrap().program,
+        state.get_process("job-456").unwrap().program,
         "node"
     );
 }

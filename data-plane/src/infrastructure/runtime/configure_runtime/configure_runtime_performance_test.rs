@@ -66,9 +66,7 @@ fn make_job(id: usize) -> Job {
 }
 
 fn make_state() -> RuntimeState {
-    RuntimeState {
-        processes: std::collections::HashMap::new(),
-    }
+    RuntimeState::new()
 }
 
 #[test]
@@ -77,7 +75,7 @@ fn configure_performance_test() {
 
     for size in test_sizes {
         let runtime = make_runtime();
-        let mut state = make_state();
+        let state = make_state();
 
         let start = Instant::now();
 
@@ -85,23 +83,26 @@ fn configure_performance_test() {
             let job = make_job(i);
 
             runtime
-                .configure(&mut state, job)
+                .configure(&state, job)
                 .expect("configure should succeed");
         }
 
         let elapsed = start.elapsed();
 
         let total_time_us = elapsed.as_micros();
-        let average_time_ns = elapsed.as_nanos() / size as u128;
+
+        let average_time_ns =
+            elapsed.as_nanos() / size as u128;
+
         let jobs_per_second =
             size as f64 / elapsed.as_secs_f64();
 
         assert_eq!(
-            state.processes.len(),
+            state.process_count(),
             size,
             "Expected {} configured jobs, got {}",
             size,
-            state.processes.len()
+            state.process_count()
         );
 
         println!(
