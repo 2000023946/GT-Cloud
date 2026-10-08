@@ -5,6 +5,26 @@ use crate::domain::resource::Resource;
 use crate::infrastructure::runtime::configure_runtime::configure_runtime::ConfigureRuntime;
 use crate::infrastructure::runtime::helpers::working_directory_manager::WorkingDirectoryManager;
 use crate::infrastructure::runtime::states::runtime_state::RuntimeState;
+use crate::observability::observability::Observability;
+use crate::ports::logger::Logger;
+use crate::ports::metrics::Metrics;
+use std::collections::HashMap;
+
+struct TestLogger;
+
+impl Logger for TestLogger {
+    fn info(&self, _message: &str, _fields: HashMap<String, String>) {}
+
+    fn error(&self, _message: &str, _fields: HashMap<String, String>) {}
+}
+
+struct TestMetrics;
+
+impl Metrics for TestMetrics {
+    fn increment(&self, _name: &str, _value: f64) {}
+
+    fn observe(&self, _name: &str, _value: f64) {}
+}
 
 fn make_manager() -> WorkingDirectoryManager {
     WorkingDirectoryManager {
@@ -12,9 +32,13 @@ fn make_manager() -> WorkingDirectoryManager {
     }
 }
 
-fn make_runtime() -> ConfigureRuntime {
+fn make_runtime() -> ConfigureRuntime<TestLogger, TestMetrics> {
     ConfigureRuntime {
         working_directory_manager: make_manager(),
+        observability: Observability {
+            logger: TestLogger,
+            metrics: TestMetrics,
+        },
     }
 }
 
@@ -171,7 +195,7 @@ fn configure_multiple_jobs() {
     let runtime = make_runtime();
     let mut state = make_state();
 
-    let mut job1 = make_job("python app.py");
+    let job1 = make_job("python app.py");
 
     let mut job2 = make_job("node server.js");
     job2.id = "job-456".to_string();

@@ -4,6 +4,7 @@ mod bootstrap;
 mod domain;
 mod infrastructure;
 mod ports;
+mod observability;
 
 fn main() {
     println!("Data plane started");

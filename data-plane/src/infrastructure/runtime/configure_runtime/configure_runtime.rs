@@ -1,29 +1,67 @@
-use crate::{domain::job::Job, infrastructure::runtime::{helpers::working_directory_manager::WorkingDirectoryManager, states::process_state::ProcessState}};
-use crate::infrastructure::runtime::states::runtime_state::RuntimeState;
-pub struct ConfigureRuntime {
+use std::collections::HashMap;
+
+use crate::{
+    domain::job::Job,
+    observability::observability::Observability,
+    infrastructure::runtime::{
+        helpers::working_directory_manager::WorkingDirectoryManager,
+        states::{
+            process_state::ProcessState,
+            runtime_state::RuntimeState,
+        },
+    },
+    ports::{
+        logger::Logger,
+        metrics::Metrics,
+    },
+};
+
+pub struct ConfigureRuntime<L, M>
+where
+    L: Logger,
+    M: Metrics,
+{
     pub(crate) working_directory_manager: WorkingDirectoryManager,
+    pub(crate) observability: Observability<L, M>,
 }
 
-impl ConfigureRuntime {
+impl<L, M> ConfigureRuntime<L, M>
+where
+    L: Logger,
+    M: Metrics,
+{
     pub fn configure(
         &self,
         state: &mut RuntimeState,
         job: Job,
     ) -> Result<(), String> {
+        let job_id = job.id.clone();
+
         let mut command_parts = job.app.command.split_whitespace();
 
-        let program = command_parts
-            .next()
-            .ok_or_else(|| "Command cannot be empty".to_string())?
-            .to_string();
+        let program = match command_parts.next() {
+            Some(program) => program.to_string(),
+            None => {
+                let mut fields = HashMap::new();
+                fields.insert("job_id".to_string(), job_id);
 
-        let args = command_parts
-            .map(String::from)
-            .collect();
+                self.observability
+                    .logger
+                    .error("Failed to configure runtime: empty command", fields);
+
+                self.observability
+                    .metrics
+                    .increment("runtime.configure.failure", 1.0);
+
+                return Err("Command cannot be empty".to_string());
+            }
+        };
+
+        let args = command_parts.map(String::from).collect();
 
         let working_directory = self
             .working_directory_manager
-            .get_directory(&job.id);
+            .get_directory(&job_id);
 
         let process_state = ProcessState {
             program,
@@ -32,7 +70,18 @@ impl ConfigureRuntime {
             environment: job.app.environment,
         };
 
-        state.processes.insert(job.id, process_state);
+        state.processes.insert(job_id.clone(), process_state);
+
+        let mut fields = HashMap::new();
+        fields.insert("job_id".to_string(), job_id);
+
+        self.observability
+            .logger
+            .info("Runtime configured job", fields);
+
+        self.observability
+            .metrics
+            .increment("runtime.configure.success", 1.0);
 
         Ok(())
     }
