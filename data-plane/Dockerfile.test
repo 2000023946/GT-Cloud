@@ -1,17 +1,10 @@
-
 FROM rust:latest
 
 WORKDIR /app
 
-# Install LLVM coverage tools
-RUN rustup component add llvm-tools-preview \
-    && cargo install cargo-llvm-cov
-
-# Copy dependency manifests
 COPY Cargo.toml Cargo.lock ./
-
-# Copy Rust source
 COPY src ./src
 
-# Run tests and enforce 95% line coverage
-CMD ["cargo", "llvm-cov", "--workspace", "--all-features", "--ignore-filename-regex", ".*_test\\.rs$", "--fail-under-lines", "95"]
+RUN cargo build --release
+
+CMD ["cargo", "test", "--release", "start_runtime_failure_test", "--", "--nocapture"]

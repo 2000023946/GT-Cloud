@@ -76,9 +76,12 @@ where
                 .map(String::from)
                 .collect();
 
-        let working_directory =
-            self.working_directory_manager
-                .get_directory(&job_id);
+        let working_directory = self
+            .working_directory_manager
+            .create_directory(&job_id)
+            .map_err(|error| {
+                format!("Failed to create working directory for job {}: {}", job_id, error)
+            })?;
 
         let process_state = ProcessState {
             program,

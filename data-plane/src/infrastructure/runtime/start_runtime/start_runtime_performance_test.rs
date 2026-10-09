@@ -1,268 +1,419 @@
 
+use std::{
+    collections::HashMap,
+    fs,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Barrier, Mutex,
+    },
+    thread,
+    time::{Duration, Instant},
+};
 
+use crate::{
+    domain::{
+        app::app::App,
+        job::{job::Job, job_status::JobStatus},
+        resource::resource::Resource,
+    },
+    infrastructure::runtime::{
+        configure_runtime::configure_runtime::ConfigureRuntime,
+        helpers::working_directory_manager::WorkingDirectoryManager,
+        start_runtime::start_runtime::StartRuntime,
+        states::runtime_state::RuntimeState,
+    },
+    observability::observability::Observability,
+    ports::{logger::Logger, metrics::Metrics},
+};
 
-#[cfg(test)]
-mod tests {
-    use std::{
-        collections::HashMap,
-        process::Command,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc, Mutex,
+struct TestLogger;
+
+impl Logger for TestLogger {
+    fn info(&self, _: &str, _: HashMap<String, String>) {}
+    fn error(&self, _: &str, _: HashMap<String, String>) {}
+}
+
+struct TestMetrics;
+
+impl Metrics for TestMetrics {
+    fn increment(&self, _: &str, _: f64) {}
+    fn observe(&self, _: &str, _: f64) {}
+}
+
+fn create_job(id: String) -> Job {
+    Job {
+        id: id.clone(),
+        app: App {
+            id: format!("app-{id}"),
+            code_path: "/tmp/app".to_string(),
+            command: "/bin/true".to_string(),
+            environment: vec![],
         },
-        thread,
-        time::{Duration, Instant},
+        name: id,
+        status: JobStatus::Received,
+        resources: Resource {
+            cpu: 1,
+            memory: 128,
+        },
+        network: vec![],
+    }
+}
+
+fn create_runtime() -> StartRuntime<TestLogger, TestMetrics> {
+    StartRuntime {
+        observability: Observability {
+            logger: TestLogger,
+            metrics: TestMetrics,
+        },
+    }
+}
+
+fn create_configure_runtime() -> ConfigureRuntime<TestLogger, TestMetrics> {
+    ConfigureRuntime {
+        working_directory_manager: WorkingDirectoryManager {
+            root: std::env::temp_dir()
+                .join("gt-cloud-performance-tests")
+                .to_string_lossy()
+                .into_owned(),
+        },
+        observability: Observability {
+            logger: TestLogger,
+            metrics: TestMetrics,
+        },
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn wait_for_child(pid: u32) {
+    let mut status: libc::c_int = 0;
+
+    loop {
+        let result = unsafe {
+            libc::waitpid(pid as libc::pid_t, &mut status, 0)
+        };
+
+        if result >= 0 {
+            break;
+        }
+
+        let error = std::io::Error::last_os_error();
+
+        if error.kind() != std::io::ErrorKind::Interrupted {
+            // The runtime may already have reaped the child.
+            break;
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn run_one_job(
+    concurrency: usize,
+    repetition: usize,
+    index: usize,
+) -> Result<f64, String> {
+    let job_id = format!(
+        "perf-{}-{}-{}-{}",
+        std::process::id(),
+        concurrency,
+        repetition,
+        index
+    );
+
+    let state = RuntimeState::new();
+    let job = create_job(job_id.clone());
+
+    create_configure_runtime()
+        .configure(&state, job.clone())
+        .map_err(|error| format!("Configuration failed: {error:?}"))?;
+
+    let runtime = create_runtime();
+
+    // Measure only the runtime startup operation.
+    let start = Instant::now();
+    let result = runtime.start(&state, job.clone());
+    let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+    let process = state.get_process(&job.id);
+    let pid = process.as_ref().and_then(|process| process.pid);
+    let working_directory = process
+        .and_then(|process| process.working_directory.clone());
+
+    // Reap the child before deleting its output directory.
+    if let Some(pid) = pid {
+        wait_for_child(pid);
+    }
+
+    if let Some(directory) = working_directory {
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    result
+        .map(|()| latency_ms)
+        .map_err(|error| format!("Startup failed: {error:?}"))
+}
+
+#[cfg(target_os = "linux")]
+fn print_results(
+    title: &str,
+    latencies: &mut [f64],
+    successes: usize,
+    failures: usize,
+    elapsed: Duration,
+) {
+    latencies.sort_by(f64::total_cmp);
+
+    let average_ms = if latencies.is_empty() {
+        0.0
+    } else {
+        latencies.iter().sum::<f64>() / latencies.len() as f64
     };
 
-    use crate::{
-        domain::{
-            app::app::App,
-            job::{
-                job::Job,
-                job_status::JobStatus,
-            },
-            resource::resource::Resource,
-        },
-        infrastructure::runtime::{
-            configure_runtime::configure_runtime::ConfigureRuntime,
-            helpers::working_directory_manager::WorkingDirectoryManager,
-            start_runtime::start_runtime::StartRuntime,
-            states::runtime_state::RuntimeState,
-        },
-        observability::observability::Observability,
-        ports::{logger::Logger, metrics::Metrics},
+    let percentile_ms = |percentile: usize| -> f64 {
+        if latencies.is_empty() {
+            return 0.0;
+        }
+
+        let index = (percentile * latencies.len()).div_ceil(100);
+        latencies[index.saturating_sub(1).min(latencies.len() - 1)]
     };
 
-    struct TestLogger;
+    let throughput = if elapsed.as_secs_f64() > 0.0 {
+        successes as f64 / elapsed.as_secs_f64()
+    } else {
+        0.0
+    };
 
-    impl Logger for TestLogger {
-        fn info(&self, _: &str, _: HashMap<String, String>) {}
+    let total = successes + failures;
+    let failure_rate = if total > 0 {
+        failures as f64 / total as f64 * 100.0
+    } else {
+        0.0
+    };
 
-        fn error(&self, _: &str, _: HashMap<String, String>) {}
-    }
+    println!("\n========== {title} ==========");
+    println!("Successful starts:  {successes}");
+    println!("Failed attempts:    {failures}");
+    println!("Failure rate:       {failure_rate:.2}%");
+    println!("Average startup:    {average_ms:.3} ms");
+    println!("p50 startup:        {:.3} ms", percentile_ms(50));
+    println!("p95 startup:        {:.3} ms", percentile_ms(95));
+    println!("p99 startup:        {:.3} ms", percentile_ms(99));
+    println!("Throughput:         {throughput:.2} starts/sec");
+    println!("Elapsed time:       {:.3} sec", elapsed.as_secs_f64());
+}
 
-    struct TestMetrics;
+#[cfg(target_os = "linux")]
+#[test]
+fn start_runtime_performance_test() {
+    const CONCURRENCY_LEVELS: [usize; 4] = [1, 4, 8, 16];
+    const BURST_REPETITIONS: usize = 3;
 
-    impl Metrics for TestMetrics {
-        fn increment(&self, _: &str, _: f64) {}
+    println!("\n========== GT CLOUD PERFORMANCE TESTS ==========");
 
-        fn observe(&self, _: &str, _: f64) {}
-    }
+    // ---------------------------------------------------------
+    // Test 1: Burst concurrency
+    // ---------------------------------------------------------
 
-    fn create_job(index: usize) -> Job {
-        Job {
-            id: format!("benchmark-job-{index}"),
-            app: App {
-                id: format!("benchmark-app-{index}"),
-                code_path: "/tmp/app".to_string(),
-                command: "/bin/sleep".to_string(),
-                environment: vec![],
-            },
-            name: format!("benchmark-{index}"),
-            status: JobStatus::Received,
-            resources: Resource {
-                cpu: 1,
-                memory: 128,
-            },
-            network: vec![],
-        }
-    }
+    println!("\nTest 1: Concurrent startup bursts");
 
-    fn create_runtime() -> StartRuntime<TestLogger, TestMetrics> {
-        StartRuntime {
-            observability: Observability {
-                logger: TestLogger,
-                metrics: TestMetrics,
-            },
-        }
-    }
+    for concurrency in CONCURRENCY_LEVELS {
+        let mut latencies = Vec::new();
+        let mut successes = 0;
+        let mut failures = 0;
+        let mut elapsed = Duration::ZERO;
 
-    fn create_configurer() -> ConfigureRuntime<TestLogger, TestMetrics> {
-        ConfigureRuntime {
-            working_directory_manager: WorkingDirectoryManager {
-                root: "/tmp/gt-cloud-benchmark".to_string(),
-            },
-            observability: Observability {
-                logger: TestLogger,
-                metrics: TestMetrics,
-            },
-        }
-    }
+        for repetition in 0..BURST_REPETITIONS {
+            let barrier = Arc::new(Barrier::new(concurrency + 1));
+            let mut handles = Vec::with_capacity(concurrency);
 
-    fn percentile(samples: &[Duration], p: usize) -> Duration {
-        if samples.is_empty() {
-            return Duration::ZERO;
-        }
+            for index in 0..concurrency {
+                let barrier = Arc::clone(&barrier);
 
-        let mut sorted = samples.to_vec();
-        sorted.sort_unstable();
+                handles.push(thread::spawn(move || {
+                    // Prepare the job before synchronizing the startup.
+                    let job_id = format!(
+                        "burst-{}-{}-{}-{}",
+                        std::process::id(),
+                        concurrency,
+                        repetition,
+                        index
+                    );
 
-        let index = ((p * sorted.len() + 99) / 100)
-            .saturating_sub(1)
-            .min(sorted.len() - 1);
+                    let state = RuntimeState::new();
+                    let job = create_job(job_id);
 
-        sorted[index]
-    }
+                    let configure_result =
+                        create_configure_runtime().configure(&state, job.clone());
 
-    fn milliseconds(duration: Duration) -> f64 {
-        duration.as_secs_f64() * 1000.0
-    }
+                    if let Err(error) = configure_result {
+                        barrier.wait();
+                        return Err(format!("Configuration failed: {error:?}"));
+                    }
 
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn start_runtime_performance_test() {
-        const THREAD_COUNTS: [usize; 3] = [4, 8, 16];
-        const WORKLOAD_COUNTS: [usize; 3] = [1_000, 10_000, 100_000];
+                    let runtime = create_runtime();
+                    barrier.wait();
 
-        let runtime = Arc::new(create_runtime());
-        let configurer = Arc::new(create_configurer());
+                    let start = Instant::now();
+                    let result = runtime.start(&state, job.clone());
+                    let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
 
-        println!("\n==========================================");
-        println!("   StartRuntime Performance Benchmark");
-        println!("==========================================");
-        println!("Platform: Linux");
-        println!("Workloads: 1,000 / 10,000 / 100,000");
-        println!("Concurrency: 4 / 8 / 16 threads\n");
+                    let process = state.get_process(&job.id);
+                    let pid = process.as_ref().and_then(|process| process.pid);
+                    let directory = process
+                        .and_then(|process| process.working_directory.clone());
 
-        println!(
-            "{:>8} {:>12} {:>10} {:>10} {:>13} {:>11} {:>10} {:>10} {:>10}",
-            "Threads", "Workloads", "Success", "Failures",
-            "Starts/sec", "Avg(ms)", "p50(ms)", "p95(ms)", "p99(ms)"
-        );
+                    if let Some(pid) = pid {
+                        wait_for_child(pid);
+                    }
 
-        for workloads in WORKLOAD_COUNTS {
-            for threads in THREAD_COUNTS {
-                let next = Arc::new(AtomicUsize::new(0));
-                let latencies = Arc::new(Mutex::new(Vec::<Duration>::new()));
-                let successes = Arc::new(AtomicUsize::new(0));
-                let failures = Arc::new(AtomicUsize::new(0));
+                    if let Some(directory) = directory {
+                        let _ = fs::remove_dir_all(directory);
+                    }
 
-                let wall_start = Instant::now();
-                let mut handles = Vec::new();
+                    result
+                        .map(|()| latency_ms)
+                        .map_err(|error| format!("Startup failed: {error:?}"))
+                }));
+            }
 
-                for _ in 0..threads {
-                    let runtime = Arc::clone(&runtime);
-                    let configurer = Arc::clone(&configurer);
-                    let next = Arc::clone(&next);
-                    let latencies = Arc::clone(&latencies);
-                    let successes = Arc::clone(&successes);
-                    let failures = Arc::clone(&failures);
+            let batch_start = Instant::now();
+            barrier.wait();
 
-                    handles.push(thread::spawn(move || loop {
-                        let index = next.fetch_add(1, Ordering::Relaxed);
-
-                        if index >= workloads {
-                            break;
-                        }
-
-                        let job = create_job(index);
-                        let state = RuntimeState::new();
-
-                        // Prepare the process state before measuring startup.
-                        if let Err(error) = configurer.configure(&state, job.clone()) {
-                            failures.fetch_add(1, Ordering::Relaxed);
-                            eprintln!(
-                                "Configure failed for {}: {}",
-                                job.id, error
-                            );
-                            continue;
-                        }
-
-                        // Measure the actual StartRuntime::start call.
-                        let start = Instant::now();
-                        let result = runtime.start(&state, job.clone());
-                        let latency = start.elapsed();
-
-                        latencies
-                            .lock()
-                            .expect("latency mutex poisoned")
-                            .push(latency);
-
-                        match result {
-                            Ok(()) => {
-                                successes.fetch_add(1, Ordering::Relaxed);
-
-                                // Stop the process before this worker starts
-                                // another job, limiting active jobs by threads.
-                                if let Some(process_state) =
-                                    state.get_process(&job.id)
-                                {
-                                    if let Some(pid) = process_state.pid {
-                                        let _ = Command::new("kill")
-                                            .arg("-KILL")
-                                            .arg(pid.to_string())
-                                            .status();
-                                    }
-                                }
-                            }
-                            Err(error) => {
-                                failures.fetch_add(1, Ordering::Relaxed);
-                                eprintln!(
-                                    "Start failed for {}: {}",
-                                    job.id, error
-                                );
-                            }
-                        }
-                    }));
-                }
-
-                for handle in handles {
-                    if handle.join().is_err() {
-                        failures.fetch_add(1, Ordering::Relaxed);
-                        eprintln!("A benchmark worker panicked");
+            for handle in handles {
+                match handle.join() {
+                    Ok(Ok(latency)) => {
+                        latencies.push(latency);
+                        successes += 1;
+                    }
+                    Ok(Err(error)) => {
+                        failures += 1;
+                        eprintln!("{error}");
+                    }
+                    Err(_) => {
+                        failures += 1;
+                        eprintln!("Benchmark thread panicked");
                     }
                 }
+            }
 
-                let elapsed = wall_start.elapsed();
-                let success_count = successes.load(Ordering::Relaxed);
-                let failure_count = failures.load(Ordering::Relaxed);
+            elapsed += batch_start.elapsed();
+        }
 
-                let samples = latencies
-                    .lock()
-                    .expect("latency mutex poisoned")
-                    .clone();
+        print_results(
+            &format!("BURST: {concurrency} concurrent starts"),
+            &mut latencies,
+            successes,
+            failures,
+            elapsed,
+        );
+    }
 
-                let average = if samples.is_empty() {
-                    Duration::ZERO
-                } else {
-                    Duration::from_nanos(
-                        (samples.iter().map(Duration::as_nanos).sum::<u128>()
-                            / samples.len() as u128)
-                            .min(u64::MAX as u128) as u64,
-                    )
-                };
+    // ---------------------------------------------------------
+    // Test 2: Sustained load
+    // ---------------------------------------------------------
 
-                let throughput = if elapsed.is_zero() {
-                    0.0
-                } else {
-                    success_count as f64 / elapsed.as_secs_f64()
-                };
+    println!("\nTest 2: Sustained startup load");
 
-                println!(
-                    "{:>8} {:>12} {:>10} {:>10} {:>13.2} {:>11.3} \
-                     {:>10.3} {:>10.3} {:>10.3}",
-                    threads,
-                    workloads,
-                    success_count,
-                    failure_count,
-                    throughput,
-                    milliseconds(average),
-                    milliseconds(percentile(&samples, 50)),
-                    milliseconds(percentile(&samples, 95)),
-                    milliseconds(percentile(&samples, 99)),
-                );
+    const LOAD_DURATION: Duration = Duration::from_secs(10);
+
+    // Safety limit prevents an unexpected runtime or container
+    // configuration from creating unlimited processes.
+    const MAX_ATTEMPTS_PER_LEVEL: usize = 500;
+
+    for concurrency in CONCURRENCY_LEVELS {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let successes = Arc::new(AtomicUsize::new(0));
+        let failures = Arc::new(AtomicUsize::new(0));
+        let latencies = Arc::new(Mutex::new(Vec::<f64>::new()));
+
+        let barrier = Arc::new(Barrier::new(concurrency + 1));
+        let mut handles = Vec::with_capacity(concurrency);
+
+        for worker in 0..concurrency {
+            let attempts = Arc::clone(&attempts);
+            let successes = Arc::clone(&successes);
+            let failures = Arc::clone(&failures);
+            let latencies = Arc::clone(&latencies);
+            let barrier = Arc::clone(&barrier);
+
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+
+                let deadline = Instant::now() + LOAD_DURATION;
+
+                loop {
+                    if Instant::now() >= deadline {
+                        break;
+                    }
+
+                    // Atomically reserve one attempt, respecting the cap.
+                    let reserved = attempts.fetch_update(
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                        |current| {
+                            if current < MAX_ATTEMPTS_PER_LEVEL {
+                                Some(current + 1)
+                            } else {
+                                None
+                            }
+                        },
+                    );
+
+                    if reserved.is_err() {
+                        break;
+                    }
+
+                    let index = reserved.unwrap();
+
+                    match run_one_job(concurrency, worker, index) {
+                        Ok(latency_ms) => {
+                            successes.fetch_add(1, Ordering::Relaxed);
+
+                            if let Ok(mut values) = latencies.lock() {
+                                values.push(latency_ms);
+                            }
+                        }
+                        Err(error) => {
+                            failures.fetch_add(1, Ordering::Relaxed);
+                            eprintln!("{error}");
+                        }
+                    }
+                }
+            }));
+        }
+
+        let load_start = Instant::now();
+        barrier.wait();
+
+        for handle in handles {
+            if handle.join().is_err() {
+                failures.fetch_add(1, Ordering::Relaxed);
+                eprintln!("Sustained-load worker panicked");
             }
         }
 
-        println!("\nBenchmark finished.");
-    }
+        let elapsed = load_start.elapsed();
+        let successes = successes.load(Ordering::Relaxed);
+        let failures = failures.load(Ordering::Relaxed);
 
-    #[cfg(not(target_os = "linux"))]
-    #[test]
-    fn start_runtime_performance_test() {
+        let mut latency_values = match latencies.lock() {
+            Ok(values) => values.clone(),
+            Err(_) => Vec::new(),
+        };
+
+        print_results(
+            &format!("SUSTAINED LOAD: {concurrency} workers"),
+            &mut latency_values,
+            successes,
+            failures,
+            elapsed,
+        );
+
         println!(
-            "Actual StartRuntime performance benchmark requires Linux. \
-             Run this test inside your Linux Docker container."
+            "Attempt cap reached: {}",
+            attempts.load(Ordering::Relaxed) >= MAX_ATTEMPTS_PER_LEVEL
         );
     }
+
+    println!("\n========== ALL PERFORMANCE TESTS COMPLETE ==========");
 }
