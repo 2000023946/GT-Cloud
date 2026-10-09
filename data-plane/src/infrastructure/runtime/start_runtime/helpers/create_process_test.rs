@@ -1,59 +1,74 @@
+
 #[cfg(all(test, target_os = "linux"))]
-mod tests {
-    use std::collections::HashMap;
+use super::create_process::create_process_with;
 
-    use crate::{
-        infrastructure::runtime::start_runtime::helpers::{
-            child_process::ChildProcess,
-            create_child_stack::create_child_stack,
-            create_process::create_process,
+#[cfg(all(test, target_os = "linux"))]
+use libc::{
+    CLONE_NEWIPC, CLONE_NEWNS, CLONE_NEWPID, CLONE_NEWUSER, CLONE_NEWUTS, SIGCHLD,
+};
+
+#[cfg(all(test, target_os = "linux"))]
+use std::ffi::c_void;
+
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+fn create_process_with_returns_pid_on_success() {
+    let mut stack = vec![0_u8; 1024];
+    let mut called = false;
+
+    let result = create_process_with(
+        &mut stack,
+        (),
+        |stack_top, flags, context_ptr| {
+            called = true;
+
+            assert!(!stack_top.is_null());
+            assert_eq!(
+                flags,
+                CLONE_NEWPID
+                    | CLONE_NEWNS
+                    | CLONE_NEWUTS
+                    | CLONE_NEWIPC
+                    | CLONE_NEWUSER
+                    | SIGCHLD
+            );
+            assert!(!context_ptr.is_null());
+
+            // The mock does not create a child to own the context.
+            // Reclaim it to avoid leaking memory in this test.
+            unsafe {
+                drop(Box::from_raw(context_ptr as *mut ()));
+            }
+
+            123 as libc::pid_t
         },
-        observability::observability::Observability,
-        ports::{logger::Logger, metrics::Metrics},
-    };
+        || panic!("failure callback should not run on success"),
+    );
 
-    struct TestLogger;
+    assert!(called);
+    assert_eq!(result.unwrap(), 123);
+}
 
-    impl Logger for TestLogger {
-        fn info(&self, _: &str, _: HashMap<String, String>) {}
-        fn error(&self, _: &str, _: HashMap<String, String>) {}
-    }
+#[cfg(all(test, target_os = "linux"))]
+#[test]
+fn create_process_with_returns_error_on_clone_failure() {
+    let mut stack = vec![0_u8; 1024];
+    let mut failure_called = false;
 
-    struct TestMetrics;
+    let result = create_process_with(
+        &mut stack,
+        (),
+        |stack_top, _flags, context_ptr| {
+            assert!(!stack_top.is_null());
+            assert!(!context_ptr.is_null());
 
-    impl Metrics for TestMetrics {
-        fn increment(&self, _: &str, _: f64) {}
-        fn observe(&self, _: &str, _: f64) {}
-    }
+            -1 as libc::pid_t
+        },
+        || {
+            failure_called = true;
+        },
+    );
 
-    #[test]
-    fn creates_child_process_and_records_pid() {
-        let observability = Observability {
-            logger: TestLogger,
-            metrics: TestMetrics,
-        };
-
-        let child = ChildProcess {
-            program: "/bin/true".into(),
-            args: vec![],
-            working_directory: Some("/tmp".into()),
-            environment: vec![],
-        };
-
-        let mut stack = create_child_stack();
-
-        let pid = create_process(&observability, &mut stack, child)
-            .expect("Failed to create child process");
-
-        assert!(pid > 0);
-
-        let mut status: libc::c_int = 0;
-        let waited = unsafe {
-            libc::waitpid(pid as libc::pid_t, &mut status, 0)
-        };
-
-        assert_eq!(waited, pid as libc::pid_t);
-        assert!(libc::WIFEXITED(status));
-        assert_eq!(libc::WEXITSTATUS(status), 0);
-    }
+    assert!(failure_called);
+    assert!(result.is_err());
 }

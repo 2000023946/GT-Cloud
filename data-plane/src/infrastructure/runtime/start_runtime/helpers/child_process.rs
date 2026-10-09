@@ -2,6 +2,7 @@
 #[cfg(target_os = "linux")]
 use std::{
     fs::{File, OpenOptions},
+    io::Write,
     os::unix::process::CommandExt,
     path::Path,
     process::{Command, Stdio},
@@ -13,6 +14,37 @@ pub struct ChildProcess {
     pub args: Vec<String>,
     pub working_directory: Option<String>,
     pub environment: Vec<(String, String)>,
+}
+
+#[cfg(target_os = "linux")]
+pub fn create_log_file(path: &Path) -> std::io::Result<File> {
+    File::create(path)
+}
+
+#[cfg(target_os = "linux")]
+pub fn append_exec_error(
+    stderr_path: &Path,
+    program: &str,
+    args: &[String],
+    error: &std::io::Error,
+) {
+    let message = format!(
+        "Failed to execute {:?} with args {:?}: {}",
+        program, args, error
+    );
+
+    match OpenOptions::new().append(true).open(stderr_path) {
+        Ok(mut file) => {
+            let _ = writeln!(file, "{message}");
+        }
+        Err(log_error) => {
+            eprintln!("{message}");
+            eprintln!(
+                "Failed to append to stderr log {:?}: {}",
+                stderr_path, log_error
+            );
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -35,8 +67,7 @@ impl ChildProcess {
         let stdout_path = Path::new(log_directory).join("stdout.txt");
         let stderr_path = Path::new(log_directory).join("stderr.txt");
 
-        // Create fresh log files for this execution.
-        let stdout_file = match File::create(&stdout_path) {
+        let stdout_file = match create_log_file(&stdout_path) {
             Ok(file) => file,
             Err(error) => {
                 eprintln!(
@@ -47,7 +78,7 @@ impl ChildProcess {
             }
         };
 
-        let stderr_file = match File::create(&stderr_path) {
+        let stderr_file = match create_log_file(&stderr_path) {
             Ok(file) => file,
             Err(error) => {
                 eprintln!(
@@ -76,18 +107,17 @@ impl ChildProcess {
             command.env(key, value);
         }
 
-        // Replace the child process with the requested application.
+        // Replace this process with the requested application.
+        // This returns only if exec fails.
         let error = command.exec();
 
-        // If exec fails, report the reason in the job's stderr log.
-        eprintln!(
-            "Failed to execute {:?} with args {:?}: {}",
-            context.program,
-            context.args,
-            error
+        append_exec_error(
+            &stderr_path,
+            &context.program,
+            &context.args,
+            &error,
         );
 
         127
     }
 }
-
