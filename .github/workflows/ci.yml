@@ -65,8 +65,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build test Docker image
-        run: docker build -f Dockerfile.cicd -t gt-cloud-data-plane-test .
+        run: docker build -f Dockerfile.cicd -t gt-cloud-data-plane-cicd .
 
       - name: Run tests and coverage
-        run: docker run --rm gt-cloud-data-plane-test
+        run: docker run --rm --privileged gt-cloud-runtime-cicd
 
