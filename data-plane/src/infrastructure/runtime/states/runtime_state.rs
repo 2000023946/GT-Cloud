@@ -2,11 +2,13 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+use crate::domain::runtime_states::runtime_states::RuntimeStates;
 use crate::infrastructure::runtime::states::process_state::ProcessState;
 
 pub struct RuntimeState {
     processes: RwLock<HashMap<String, ProcessState>>,
     stacks: RwLock<HashMap<String, Vec<u8>>>,
+    statuses: RwLock<HashMap<String, RuntimeStates>>,
 }
 
 impl RuntimeState {
@@ -14,6 +16,7 @@ impl RuntimeState {
         Self {
             processes: RwLock::new(HashMap::new()),
             stacks: RwLock::new(HashMap::new()),
+            statuses: RwLock::new(HashMap::new()),
         }
     }
 
@@ -120,6 +123,14 @@ impl RuntimeState {
     pub fn stack_count(&self) -> usize {
         let stacks = self.stacks.read().unwrap();
         stacks.len()
+    }
+    pub fn save_status(&self, job_id: String, status: RuntimeStates) {
+        let mut statuses = self.statuses.write().unwrap();
+        statuses.insert(job_id, status);
+    }
+    pub fn get_status(&self, job_id: &str) -> Option<RuntimeStates> {
+        let statuses = self.statuses.read().unwrap();
+        statuses.get(job_id).cloned()
     }
 }
 

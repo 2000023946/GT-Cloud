@@ -1,5 +1,5 @@
 #[derive(Clone)]
-pub struct NetworkState {
+pub struct NetworkStates {
     pub healthy: bool,
     pub ip_address: Option<String>,
 }
