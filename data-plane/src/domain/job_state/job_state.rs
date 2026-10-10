@@ -1,10 +1,11 @@
-use crate::domain::{network_state::network_state::NetworkState, resource_state::resource_state::ResourceState, runtime_state::runtime_state::RuntimeState};
+use crate::domain::{network_states::network_states::NetworkStates, resource_states::resource_states::ResourceStates, runtime_states::runtime_states::RuntimeStates};
+
 
 
 #[derive(Clone)]
 pub struct JobState {
     pub job_id: String,
-    pub runtime: RuntimeState,
-    pub resources: ResourceState,
-    pub network: NetworkState,
+    pub runtime: RuntimeStates,
+    pub resources: ResourceStates,
+    pub network: NetworkStates,
 }

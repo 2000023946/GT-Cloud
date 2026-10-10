@@ -1,3 +1,4 @@
+
 name: CI
 
 on:
@@ -63,26 +64,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Build test Docker image
+        run: docker build -f Dockerfile.cicd -t gt-cloud-runtime-cicd .
 
-      - name: Check compilation
-        run: cargo check
+      - name: Run tests and coverage
+        run: docker run --rm --privileged gt-cloud-runtime-cicd
 
-      - name: Run tests
-        run: cargo test
-
-      - name: Run Clippy
-        run: cargo clippy
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Check coverage
-        run: |
-          cargo llvm-cov \
-            --all-features \
-            --workspace \
-            --fail-under-lines 95

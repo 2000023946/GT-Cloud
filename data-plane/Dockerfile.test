@@ -1,0 +1,10 @@
+FROM rust:latest
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo build --release
+
+CMD ["cargo", "test", "--release", "child_process_test", "--", "--nocapture"]
