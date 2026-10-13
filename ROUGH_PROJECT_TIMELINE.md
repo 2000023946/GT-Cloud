@@ -137,3 +137,143 @@ Spring 2027
 **Fall = Build and prove the platform.**
 
 **Spring = Deploy it and build services on top of it.**
+
+
+
+Yep. I’d make the six sub-issues like this:
+
+### 1. Data Plane — Runtime: Implement & Test `configure()`
+
+**Description:**
+
+> Implement the Runtime `configure()` method.
+>
+> Prepare a job for execution, including its program, arguments, environment, working directory, and any Runtime-owned state required before starting the process.
+>
+> Include:
+>
+> * Functional tests
+> * Failure/error tests
+> * Concurrency tests where applicable
+> * Latency/performance testing
+> * Logging and metrics
+> * Documentation of the method and its behavior
+> * Documentation of tests performed and their results, including latency measurements
+
+---
+
+### 2. Data Plane — Runtime: Implement & Test `start()`
+
+**Description:**
+
+> Implement the Runtime `start()` method to launch a configured job as a Linux process.
+>
+> The Runtime should create and track the process information needed for later monitoring, stopping, and cleanup.
+>
+> Include:
+>
+> * Functional tests
+> * Failure/error tests
+> * Concurrent process-start tests
+> * Latency/performance testing
+> * Logging and metrics for process starts and failures
+> * Documentation of the method and process state
+> * Documentation of tests performed and their results, including latency measurements
+
+---
+
+### 3. Data Plane — Runtime: Implement & Test `monitor()`
+
+**Description:**
+
+> Implement the Runtime `monitor()` method to perform a single observation of a job's current process state.
+>
+> Return the appropriate `RuntimeState`, such as running, exited, signaled, or not found.
+>
+> Include:
+>
+> * Running-process tests
+> * Exited-process tests
+> * Signaled-process tests
+> * Missing/unknown job tests
+> * Concurrent monitoring tests
+> * Latency/performance testing
+> * Logging and metrics for monitoring operations and results
+> * Documentation of the method and `RuntimeState` behavior
+> * Documentation of tests performed and their results, including latency measurements
+>
+> `monitor()` should perform one observation and should not contain its own monitoring loop or orchestrate other Runtime operations.
+
+---
+
+### 4. Data Plane — Runtime: Implement & Test `stop()`
+
+**Description:**
+
+> Implement the Runtime `stop()` method to terminate a running job.
+>
+> The method should correctly handle running processes, already-exited processes, and unknown jobs.
+>
+> Include:
+>
+> * Functional tests
+> * Failure/error tests
+> * Concurrent stop tests
+> * Latency/performance testing
+> * Logging and metrics for process termination and failures
+> * Documentation of termination behavior and error handling
+> * Documentation of tests performed and their results, including latency measurements
+
+---
+
+### 5. Data Plane — Runtime: Implement & Test `cleanup()`
+
+**Description:**
+
+> Implement the Runtime `cleanup()` method to remove Runtime-owned state and resources associated with a job.
+>
+> Cleanup should leave the Runtime in a consistent state and prevent process or Runtime-state leaks.
+>
+> Include:
+>
+> * Functional tests
+> * Failure/error tests
+> * Cleanup after successful execution
+> * Cleanup after failed execution
+> * Concurrent cleanup tests
+> * Process/state leak tests
+> * Latency/performance testing
+> * Logging and metrics for cleanup operations and failures
+> * Documentation explaining what cleanup removes and when it should be used
+> * Documentation of tests performed and their results, including latency measurements
+
+---
+
+### 6. Data Plane — Runtime: Lifecycle & Randomized Stress Testing
+
+**Description:**
+
+> Test the Runtime as a complete system across multiple jobs and different operation sequences.
+>
+> Test:
+>
+> * Full lifecycle: `configure → start → monitor → stop → cleanup`
+> * Invalid or incomplete lifecycle sequences
+> * Multiple jobs running concurrently
+> * Randomized operation sequences
+> * Randomized concurrent operations
+> * Runtime state consistency
+> * Process leaks
+> * Runtime state leaks
+> * Long-running stress tests
+>
+> Record and document:
+>
+> * Number of tests and operations
+> * Successful and failed operations
+> * Latency results
+> * Failures or leaks found
+> * Random seed when applicable
+> * Any issues discovered and fixes made
+>
+> The final Runtime should remain stable and consistent under normal, invalid, concurrent, and randomized workloads.
