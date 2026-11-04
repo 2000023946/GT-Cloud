@@ -87,8 +87,19 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
             _signal: libc::c_int,
         ) -> libc::c_int {
             self.kill_calls.fetch_add(1, Ordering::Relaxed);
-            0 // Simulate successful SIGTERM.
+            0
         }
+
+        fn waitpid(
+            &self,
+            pid: libc::pid_t,
+            _status: &mut libc::c_int,
+            _options: libc::c_int,
+        ) -> libc::pid_t {
+            pid
+        }
+
+        fn sleep(&self, _duration: std::time::Duration) {}
 
         fn last_os_error(&self) -> io::Error {
             io::Error::other("Unexpected mock OS error")
