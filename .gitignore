@@ -1,2 +1,3 @@
 data-plane/target/*
 control-plane/coverage.out
+data-plane/coverage-html/*
