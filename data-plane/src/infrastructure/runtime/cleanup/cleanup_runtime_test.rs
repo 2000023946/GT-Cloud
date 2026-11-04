@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -7,9 +6,19 @@ mod tests {
             job::{Job, JobStatus},
             network::NetworkRule,
             resource::Resource,
-        }, infrastructure::runtime::{cleanup::{
-                cleanup_runtime::CleanupRuntime, cleanup_runtime_state::CleanupRuntimeState, cleanup_runtime_telemetry::CleanupRuntimeTelemetry,
-            }, states::{process_state::ProcessState, runtime_state::RuntimeState}}, observability::observability::Observability, ports::{logger::Logger, metrics::Metrics},
+        },
+        infrastructure::runtime::{
+            cleanup::{
+                cleanup_runtime::CleanupRuntime,
+                cleanup_runtime_telemetry::CleanupRuntimeTelemetry,
+            },
+            states::{
+                process_state::ProcessState,
+                runtime_state::RuntimeState,
+            },
+        },
+        observability::observability::Observability,
+        ports::{logger::Logger, metrics::Metrics},
     };
 
     use std::{
@@ -70,43 +79,10 @@ mod tests {
     }
 
     // --------------------------------------------------
-    // Mock Cleanup Runtime State
-    // --------------------------------------------------
-
-    struct MockCleanupRuntimeState {
-        should_fail_process: bool,
-        should_fail_stack: bool,
-    }
-
-    impl CleanupRuntimeState for MockCleanupRuntimeState {
-        fn remove_process(
-            &self,
-            _job_id: &str,
-        ) -> Result<Option<ProcessState>, String> {
-            if self.should_fail_process {
-                return Err("Process cleanup failed".to_string());
-            }
-
-            Ok(None)
-        }
-
-        fn remove_stack(
-            &self,
-            _job_id: &str,
-        ) -> Result<Option<Vec<u8>>, String> {
-            if self.should_fail_stack {
-                return Err("Stack cleanup failed".to_string());
-            }
-
-            Ok(None)
-        }
-    }
-
-    // --------------------------------------------------
     // Test Helpers
     // --------------------------------------------------
 
-    pub(crate)fn create_job(job_id: &str) -> Job {
+    pub(crate) fn create_job(job_id: &str) -> Job {
         Job {
             id: job_id.to_string(),
             app: App {
@@ -126,7 +102,7 @@ mod tests {
     }
 
     pub(crate) fn create_cleanup_runtime() -> (
-        CleanupRuntime<Arc<RuntimeState>, TestLogger, TestMetrics>,
+        CleanupRuntime<TestLogger, TestMetrics>,
         Arc<RuntimeState>,
         TestLogger,
         TestMetrics,
@@ -143,43 +119,9 @@ mod tests {
 
         let telemetry = CleanupRuntimeTelemetry::new(observability);
 
-        let cleanup = CleanupRuntime::new(
-            Arc::clone(&runtime_state),
-            telemetry,
-        );
+        let cleanup = CleanupRuntime::new(telemetry);
 
         (cleanup, runtime_state, logger, metrics)
-    }
-
-    fn create_mock_cleanup_runtime(
-        should_fail_process: bool,
-        should_fail_stack: bool,
-    ) -> (
-        CleanupRuntime<Arc<MockCleanupRuntimeState>, TestLogger, TestMetrics>,
-        TestLogger,
-        TestMetrics,
-    ) {
-        let mock_state = Arc::new(MockCleanupRuntimeState {
-            should_fail_process,
-            should_fail_stack,
-        });
-
-        let logger = TestLogger::default();
-        let metrics = TestMetrics::default();
-
-        let observability = Observability {
-            logger: logger.clone(),
-            metrics: metrics.clone(),
-        };
-
-        let telemetry = CleanupRuntimeTelemetry::new(observability);
-
-        let cleanup = CleanupRuntime::new(
-            mock_state,
-            telemetry,
-        );
-
-        (cleanup, logger, metrics)
     }
 
     // --------------------------------------------------
@@ -205,7 +147,9 @@ mod tests {
 
         assert!(runtime_state.contains_process(job_id));
 
-        cleanup.cleanup(create_job(job_id)).unwrap();
+        cleanup
+            .cleanup(&runtime_state, create_job(job_id))
+            .unwrap();
 
         assert!(!runtime_state.contains_process(job_id));
     }
@@ -223,7 +167,9 @@ mod tests {
 
         assert!(runtime_state.contains_stack(job_id));
 
-        cleanup.cleanup(create_job(job_id)).unwrap();
+        cleanup
+            .cleanup(&runtime_state, create_job(job_id))
+            .unwrap();
 
         assert!(!runtime_state.contains_stack(job_id));
     }
@@ -250,7 +196,9 @@ mod tests {
             vec![0u8; 4096],
         );
 
-        cleanup.cleanup(create_job(job_id)).unwrap();
+        cleanup
+            .cleanup(&runtime_state, create_job(job_id))
+            .unwrap();
 
         assert!(!runtime_state.contains_process(job_id));
         assert!(!runtime_state.contains_stack(job_id));
@@ -258,9 +206,12 @@ mod tests {
 
     #[test]
     fn cleanup_logs_success() {
-        let (cleanup, _, logger, metrics) = create_cleanup_runtime();
+        let (cleanup, runtime_state, logger, metrics) =
+            create_cleanup_runtime();
 
-        cleanup.cleanup(create_job("job-123")).unwrap();
+        cleanup
+            .cleanup(&runtime_state, create_job("job-123"))
+            .unwrap();
 
         let info_calls = logger.info_calls.lock().unwrap();
 
@@ -293,8 +244,13 @@ mod tests {
             vec![0u8; 4096],
         );
 
-        cleanup.cleanup(create_job(job_id)).unwrap();
-        cleanup.cleanup(create_job(job_id)).unwrap();
+        cleanup
+            .cleanup(&runtime_state, create_job(job_id))
+            .unwrap();
+
+        cleanup
+            .cleanup(&runtime_state, create_job(job_id))
+            .unwrap();
 
         assert!(!runtime_state.contains_stack(job_id));
         assert_eq!(logger.info_calls.lock().unwrap().len(), 2);
@@ -302,85 +258,5 @@ mod tests {
         let increment_calls = metrics.increment_calls.lock().unwrap();
 
         assert_eq!(increment_calls.len(), 2);
-    }
-
-    // --------------------------------------------------
-    // Failure Tests
-    // --------------------------------------------------
-
-    #[test]
-    fn cleanup_handles_process_removal_failure() {
-        let (cleanup, logger, metrics) =
-            create_mock_cleanup_runtime(true, false);
-
-        let result = cleanup.cleanup(create_job("job-123"));
-
-        assert_eq!(
-            result.unwrap_err(),
-            "Process cleanup failed"
-        );
-
-        let error_calls = logger.error_calls.lock().unwrap();
-
-        assert_eq!(error_calls.len(), 1);
-        assert_eq!(
-            error_calls[0].0,
-            "Failed to clean up runtime"
-        );
-        assert_eq!(
-            error_calls[0].1.get("job_id").unwrap(),
-            "job-123"
-        );
-        assert_eq!(
-            error_calls[0].1.get("error").unwrap(),
-            "Process cleanup failed"
-        );
-
-        assert!(logger.info_calls.lock().unwrap().is_empty());
-
-        let increment_calls = metrics.increment_calls.lock().unwrap();
-
-        assert_eq!(
-            increment_calls.as_slice(),
-            &[("runtime_cleanup_failure".to_string(), 1.0)]
-        );
-    }
-
-    #[test]
-    fn cleanup_handles_stack_removal_failure() {
-        let (cleanup, logger, metrics) =
-            create_mock_cleanup_runtime(false, true);
-
-        let result = cleanup.cleanup(create_job("job-123"));
-
-        assert_eq!(
-            result.unwrap_err(),
-            "Stack cleanup failed"
-        );
-
-        let error_calls = logger.error_calls.lock().unwrap();
-
-        assert_eq!(error_calls.len(), 1);
-        assert_eq!(
-            error_calls[0].0,
-            "Failed to clean up runtime"
-        );
-        assert_eq!(
-            error_calls[0].1.get("job_id").unwrap(),
-            "job-123"
-        );
-        assert_eq!(
-            error_calls[0].1.get("error").unwrap(),
-            "Stack cleanup failed"
-        );
-
-        assert!(logger.info_calls.lock().unwrap().is_empty());
-
-        let increment_calls = metrics.increment_calls.lock().unwrap();
-
-        assert_eq!(
-            increment_calls.as_slice(),
-            &[("runtime_cleanup_failure".to_string(), 1.0)]
-        );
     }
 }

@@ -1,7 +1,5 @@
-
 #[cfg(test)]
 mod tests {
-
     use std::{
         collections::{HashMap, VecDeque},
         io,
@@ -10,7 +8,24 @@ mod tests {
     };
 
     use crate::{
-        domain::{app::App, job::{Job, JobStatus}, resource::Resource}, infrastructure::runtime::{states::{process_state::ProcessState, runtime_state::RuntimeState}, stop_runtime::{stop_runtime::StopRuntime, stop_runtime_os_adapter::StopRuntimeOsAdapter, stop_runtime_telemetry::StopRuntimeTelemetry}}, observability::observability::Observability, ports::{logger::Logger, metrics::Metrics},
+        domain::{
+            app::App,
+            job::{Job, JobStatus},
+            resource::Resource,
+        },
+        infrastructure::runtime::{
+            states::{
+                process_state::ProcessState,
+                runtime_state::RuntimeState,
+            },
+            stop_runtime::{
+                stop_runtime::StopRuntime,
+                stop_runtime_os_adapter::StopRuntimeOsAdapter,
+                stop_runtime_telemetry::StopRuntimeTelemetry,
+            },
+        },
+        observability::observability::Observability,
+        ports::{logger::Logger, metrics::Metrics},
     };
 
     // ============================================================
@@ -240,12 +255,14 @@ mod tests {
         pid: Option<u32>,
     ) -> (
         StopRuntime<MockOsAdapter, MockLogger, MockMetrics>,
+        RuntimeState,
         Arc<Mutex<Vec<(String, f64)>>>,
         Arc<Mutex<Vec<(String, HashMap<String, String>)>>>,
         Arc<Mutex<Vec<(String, HashMap<String, String>)>>>,
     ) {
         let logger = MockLogger::new();
         let metrics = MockMetrics::new();
+
         let os_adapter = MockOsAdapter::new(
             kill_results,
             wait_results,
@@ -262,14 +279,16 @@ mod tests {
 
         let telemetry = StopRuntimeTelemetry::new(observability);
 
+        let state = create_runtime_state(pid);
+
         let runtime = StopRuntime::new(
-            create_runtime_state(pid),
             telemetry,
             os_adapter,
         );
 
         (
             runtime,
+            state,
             increment_calls,
             info_calls,
             error_calls,
@@ -284,13 +303,13 @@ mod tests {
     fn stop_returns_success_when_process_already_exited() {
         // SIGTERM returns ESRCH: process already exited.
 
-        let (runtime, metrics, info, _) = create_runtime(
-            vec![( -1, libc::ESRCH )],
+        let (runtime, state, metrics, info, _) = create_runtime(
+            vec![(-1, libc::ESRCH)],
             vec![],
             Some(PID),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_ok());
 
@@ -304,7 +323,10 @@ mod tests {
             libc::SIGTERM
         );
 
-        assert_eq!(metrics.lock().unwrap()[0].0, "runtime.stop.successes");
+        assert_eq!(
+            metrics.lock().unwrap()[0].0,
+            "runtime.stop.successes"
+        );
 
         assert_eq!(info.lock().unwrap().len(), 1);
     }
@@ -314,13 +336,13 @@ mod tests {
         // SIGTERM succeeds.
         // waitpid confirms process termination.
 
-        let (runtime, metrics, _, _) = create_runtime(
+        let (runtime, state, metrics, _, _) = create_runtime(
             vec![(0, 0)],
             vec![(PID as libc::pid_t, 0)],
             Some(PID),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_ok());
 
@@ -346,7 +368,7 @@ mod tests {
         // First wait times out.
         // SIGKILL returns ESRCH: process is already gone.
 
-        let (runtime, metrics, _, _) = create_runtime(
+        let (runtime, state, metrics, _, _) = create_runtime(
             vec![
                 (0, 0),
                 (-1, libc::ESRCH),
@@ -355,7 +377,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_ok());
 
@@ -376,13 +398,13 @@ mod tests {
         let mut wait_results = vec![(0, 0); 20];
         wait_results.push((PID as libc::pid_t, 0));
 
-        let (runtime, metrics, _, _) = create_runtime(
+        let (runtime, state, metrics, _, _) = create_runtime(
             vec![(0, 0), (0, 0)],
             wait_results,
             Some(PID),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_ok());
 
@@ -405,7 +427,7 @@ mod tests {
         // SIGKILL succeeds.
         // Final wait also times out.
 
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, state, _, _, _) = create_runtime(
             vec![
                 (0, 0),
                 (0, 0),
@@ -414,7 +436,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_err());
 
@@ -441,8 +463,9 @@ mod tests {
         let errors = logger.error_calls.clone();
         let increments = metrics.increment_calls.clone();
 
+        let state = RuntimeState::new();
+
         let runtime = StopRuntime::new(
-            RuntimeState::new(),
             StopRuntimeTelemetry::new(Observability {
                 logger,
                 metrics,
@@ -450,7 +473,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No process found"));
@@ -472,8 +495,9 @@ mod tests {
 
         let errors = logger.error_calls.clone();
 
+        let state = create_runtime_state(None);
+
         let runtime = StopRuntime::new(
-            create_runtime_state(None),
             StopRuntimeTelemetry::new(Observability {
                 logger,
                 metrics,
@@ -481,7 +505,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No PID found"));
@@ -500,8 +524,9 @@ mod tests {
 
         let errors = logger.error_calls.clone();
 
+        let state = create_runtime_state(Some(u32::MAX));
+
         let runtime = StopRuntime::new(
-            create_runtime_state(Some(u32::MAX)),
             StopRuntimeTelemetry::new(Observability {
                 logger,
                 metrics,
@@ -509,7 +534,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid PID"));
@@ -525,7 +550,7 @@ mod tests {
 
     #[test]
     fn send_signal_returns_false_when_signal_succeeds() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![(0, 0)],
             vec![],
             Some(PID),
@@ -541,7 +566,7 @@ mod tests {
 
     #[test]
     fn send_signal_returns_true_when_process_does_not_exist() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![(-1, libc::ESRCH)],
             vec![],
             Some(PID),
@@ -557,7 +582,7 @@ mod tests {
 
     #[test]
     fn send_signal_returns_error_on_permission_denied() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![(-1, libc::EPERM)],
             vec![],
             Some(PID),
@@ -574,7 +599,7 @@ mod tests {
 
     #[test]
     fn send_signal_returns_error_on_other_os_error() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![(-1, libc::EINVAL)],
             vec![],
             Some(PID),
@@ -595,7 +620,7 @@ mod tests {
 
     #[test]
     fn wait_returns_true_when_process_terminates() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![],
             vec![(PID as libc::pid_t, 0)],
             Some(PID),
@@ -611,7 +636,7 @@ mod tests {
 
     #[test]
     fn wait_returns_false_when_timeout_expires() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![],
             vec![],
             Some(PID),
@@ -631,7 +656,7 @@ mod tests {
 
     #[test]
     fn wait_retries_when_interrupted() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![],
             vec![
                 (-1, libc::EINTR),
@@ -655,7 +680,7 @@ mod tests {
 
     #[test]
     fn wait_returns_error_on_other_waitpid_error() {
-        let (runtime, _, _, _) = create_runtime(
+        let (runtime, _, _, _, _) = create_runtime(
             vec![],
             vec![(-1, libc::ECHILD)],
             Some(PID),
@@ -676,13 +701,13 @@ mod tests {
 
     #[test]
     fn successful_stop_records_success_metric_and_log() {
-        let (runtime, metrics, info, _) = create_runtime(
+        let (runtime, state, metrics, info, _) = create_runtime(
             vec![(-1, libc::ESRCH)],
             vec![],
             Some(PID),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_ok());
 
@@ -722,8 +747,9 @@ mod tests {
         let errors = logger.error_calls.clone();
         let increments = metrics.increment_calls.clone();
 
+        let state = RuntimeState::new();
+
         let runtime = StopRuntime::new(
-            RuntimeState::new(),
             StopRuntimeTelemetry::new(Observability {
                 logger,
                 metrics,
@@ -731,7 +757,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(create_job());
+        let result = runtime.stop(&state, create_job());
 
         assert!(result.is_err());
 

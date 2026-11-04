@@ -1,11 +1,26 @@
 use crate::{
-        domain::{
-            app::App, job::{Job, JobStatus}, resource::Resource,
-        }, infrastructure::runtime::{
-            states::{process_state::ProcessState, runtime_state::RuntimeState}, stop_runtime::{stop_runtime::StopRuntime, stop_runtime_os_adapter::StopRuntimeOsAdapter, stop_runtime_telemetry::StopRuntimeTelemetry},
-        }, observability::observability::Observability, ports::{logger::Logger, metrics::Metrics},
-    };
+    domain::{
+        app::App,
+        job::{Job, JobStatus},
+        resource::Resource,
+    },
+    infrastructure::runtime::{
+        states::{
+            process_state::ProcessState,
+            runtime_state::RuntimeState,
+        },
+        stop_runtime::{
+            stop_runtime::StopRuntime,
+            stop_runtime_os_adapter::StopRuntimeOsAdapter,
+            stop_runtime_telemetry::StopRuntimeTelemetry,
+        },
+    },
+    observability::observability::Observability,
+    ports::{logger::Logger, metrics::Metrics},
+};
+
 use std::collections::HashMap;
+
 fn make_job() -> Job {
     Job {
         id: "job-1".to_string(),
@@ -24,7 +39,7 @@ fn make_job() -> Job {
         network: vec![],
     }
 }
-    
+
 #[test]
 fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
     use std::{
@@ -109,7 +124,7 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
     const TOTAL_CALLS: usize = 100_000;
 
     for concurrency in [1, 4, 8, 16] {
-        let runtime_state = RuntimeState::new();
+        let runtime_state = Arc::new(RuntimeState::new());
 
         runtime_state.add_process(
             "job-1".to_string(),
@@ -132,7 +147,6 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
         });
 
         let runtime = Arc::new(StopRuntime::new(
-            runtime_state,
             telemetry,
             adapter.clone(),
         ));
@@ -144,6 +158,7 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
 
         for _ in 0..concurrency {
             let runtime = Arc::clone(&runtime);
+            let runtime_state = Arc::clone(&runtime_state);
             let barrier = Arc::clone(&barrier);
 
             let jobs = vec![make_job(); calls_per_thread];
@@ -153,7 +168,7 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
 
                 for job in jobs {
                     runtime
-                        .stop(job)
+                        .stop(&runtime_state, job)
                         .expect("mock stop operation should succeed");
                 }
             }));
@@ -176,14 +191,17 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
             adapter.kill_calls.load(Ordering::Relaxed),
             TOTAL_CALLS
         );
+
         assert_eq!(
             logger.info_calls.load(Ordering::Relaxed),
             TOTAL_CALLS
         );
+
         assert_eq!(
             logger.error_calls.load(Ordering::Relaxed),
             0
         );
+
         assert_eq!(
             metrics.increments.load(Ordering::Relaxed),
             TOTAL_CALLS

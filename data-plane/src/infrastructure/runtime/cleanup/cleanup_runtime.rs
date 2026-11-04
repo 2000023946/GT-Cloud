@@ -1,38 +1,36 @@
 use crate::{
-    domain::job::Job, infrastructure::runtime::cleanup::{cleanup_runtime_state::CleanupRuntimeState, cleanup_runtime_telemetry::CleanupRuntimeTelemetry}, ports::{logger::Logger, metrics::Metrics},
+    domain::job::Job,
+    infrastructure::runtime::{
+        cleanup::cleanup_runtime_telemetry::CleanupRuntimeTelemetry,
+        states::runtime_state::RuntimeState,
+    },
+    ports::{logger::Logger, metrics::Metrics},
 };
 
-pub struct CleanupRuntime<S, L: Logger, M: Metrics>
-where
-    S: CleanupRuntimeState,
-{
-    pub(crate) runtime_state: S,
+pub struct CleanupRuntime<L: Logger, M: Metrics> {
     pub(crate) telemetry: CleanupRuntimeTelemetry<L, M>,
 }
 
-impl<S, L: Logger, M: Metrics> CleanupRuntime<S, L, M>
-where
-    S: CleanupRuntimeState,
-{
+impl<L: Logger, M: Metrics> CleanupRuntime<L, M> {
     pub fn new(
-        runtime_state: S,
         telemetry: CleanupRuntimeTelemetry<L, M>,
     ) -> Self {
-        Self {
-            runtime_state,
-            telemetry,
-        }
+        Self { telemetry }
     }
 
-    pub fn cleanup(&self, job: Job) -> Result<(), String> {
+    pub fn cleanup(
+        &self,
+        state: &RuntimeState,
+        job: Job,
+    ) -> Result<(), String> {
         let job_id = job.id;
 
         let result = (|| -> Result<(), String> {
             // Remove process state
-            self.runtime_state.remove_process(&job_id)?;
+            state.remove_process(&job_id);
 
             // Remove child stack
-            self.runtime_state.remove_stack(&job_id)?;
+            state.remove_stack(&job_id);
 
             Ok(())
         })();

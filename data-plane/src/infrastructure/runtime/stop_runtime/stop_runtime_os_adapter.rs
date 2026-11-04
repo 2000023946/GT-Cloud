@@ -15,7 +15,14 @@ pub trait StopRuntimeOsAdapter {
 
 pub struct LinuxStopRuntimeOsAdapter;
 
+impl LinuxStopRuntimeOsAdapter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 impl StopRuntimeOsAdapter for LinuxStopRuntimeOsAdapter {
+
     fn kill(
         &self,
         pid: libc::pid_t,

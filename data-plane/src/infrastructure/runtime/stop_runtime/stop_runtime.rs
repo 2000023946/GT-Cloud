@@ -12,27 +12,30 @@ use crate::{
 };
 
 pub struct StopRuntime<A: StopRuntimeOsAdapter, L: Logger, M: Metrics> {
-    pub(crate) runtime_state: RuntimeState,
     pub(crate) telemetry: StopRuntimeTelemetry<L, M>,
     pub(crate) os_adapter: A,
 }
 
-impl<A: StopRuntimeOsAdapter, L: Logger, M: Metrics> StopRuntime<A, L, M> {
+impl<A: StopRuntimeOsAdapter, L: Logger, M: Metrics>
+    StopRuntime<A, L, M>
+{
     pub fn new(
-        runtime_state: RuntimeState,
         telemetry: StopRuntimeTelemetry<L, M>,
         os_adapter: A,
     ) -> Self {
         Self {
-            runtime_state,
             telemetry,
             os_adapter,
         }
     }
 
-    pub fn stop(&self, job: Job) -> Result<(), String> {
+    pub fn stop(
+        &self,
+        state: &RuntimeState,
+        job: Job,
+    ) -> Result<(), String> {
         let job_id = job.id;
-        let pid = self.resolve_process_id(&job_id)?;
+        let pid = self.resolve_process_id(state, &job_id)?;
 
         // Request graceful termination.
         if self.send_signal(pid, libc::SIGTERM)? {
@@ -59,9 +62,12 @@ impl<A: StopRuntimeOsAdapter, L: Logger, M: Metrics> StopRuntime<A, L, M> {
         Ok(())
     }
 
-    fn resolve_process_id(&self, job_id: &str) -> Result<libc::pid_t, String> {
-        let process = self
-            .runtime_state
+    fn resolve_process_id(
+        &self,
+        state: &RuntimeState,
+        job_id: &str,
+    ) -> Result<libc::pid_t, String> {
+        let process = state
             .get_process(job_id)
             .ok_or_else(|| format!("No process found for job {}", job_id));
 
@@ -136,9 +142,9 @@ impl<A: StopRuntimeOsAdapter, L: Logger, M: Metrics> StopRuntime<A, L, M> {
         while start_time.elapsed() < timeout {
             let mut status: libc::c_int = 0;
 
-            let result =
-                self.os_adapter
-                    .waitpid(pid, &mut status, libc::WNOHANG);
+            let result = self
+                .os_adapter
+                .waitpid(pid, &mut status, libc::WNOHANG);
 
             if result == pid {
                 return Ok(true);
@@ -180,12 +186,20 @@ impl<A: StopRuntimeOsAdapter, L: Logger, M: Metrics> StopRuntime<A, L, M> {
         }
     }
 
-    pub fn record_stop_success(&self, job_id: &str, pid: libc::pid_t) {
+    pub fn record_stop_success(
+        &self,
+        job_id: &str,
+        pid: libc::pid_t,
+    ) {
         self.telemetry.log_stop_success(job_id, pid);
         self.telemetry.record_stop_success();
     }
 
-    pub fn record_stop_failure(&self, job_id: &str, error: &str) {
+    pub fn record_stop_failure(
+        &self,
+        job_id: &str,
+        error: &str,
+    ) {
         self.telemetry.log_stop_failure(job_id, error);
         self.telemetry.record_stop_failure();
     }

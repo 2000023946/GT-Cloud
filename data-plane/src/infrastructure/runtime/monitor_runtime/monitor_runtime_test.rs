@@ -1,7 +1,6 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
@@ -117,12 +116,10 @@ mod tests {
     }
 
     fn make_monitor(
-        state: RuntimeState,
         logger: TestLogger,
         metrics: TestMetrics,
     ) -> Monitor<TestLogger, TestMetrics> {
         Monitor::with_waitpid(
-            state,
             Observability { logger, metrics },
             mock_waitpid,
         )
@@ -131,9 +128,9 @@ mod tests {
     #[test]
     fn missing_process_returns_not_found() {
         let monitor =
-            make_monitor(RuntimeState::new(), make_logger(), make_metrics());
+            make_monitor(make_logger(), make_metrics());
 
-        let result = monitor.monitor(make_job("missing"));
+        let result = monitor.monitor(&RuntimeState::new(), make_job("missing"));
 
         assert!(matches!(result, Ok(RuntimeStates::NotFound)));
     }
@@ -143,8 +140,8 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(None));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(result, Ok(RuntimeStates::NotFound)));
     }
@@ -156,11 +153,11 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(Some(1234)));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(result, Ok(RuntimeStates::Running)));
-        assert!(monitor.runtime_state.get_status("job-1").is_none());
+        assert!(state.get_status("job-1").is_none());
     }
 
     #[test]
@@ -170,8 +167,8 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(Some(1234)));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(
             result,
@@ -179,7 +176,7 @@ mod tests {
         ));
 
         assert!(matches!(
-            monitor.runtime_state.get_status("job-1"),
+            state.get_status("job-1"),
             Some(RuntimeStates::Exited { code: 7 })
         ));
     }
@@ -191,8 +188,8 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(Some(1234)));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(
             result,
@@ -201,7 +198,7 @@ mod tests {
         ));
 
         assert!(matches!(
-            monitor.runtime_state.get_status("job-1"),
+            state.get_status("job-1"),
             Some(RuntimeStates::Signaled { signal })
                 if signal == libc::SIGTERM
         ));
@@ -214,8 +211,8 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(Some(1234)));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(result, Ok(RuntimeStates::Error)));
     }
@@ -227,8 +224,8 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(Some(1234)));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(result.is_err());
     }
@@ -241,8 +238,8 @@ mod tests {
             RuntimeStates::Exited { code: 3 },
         );
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(
             result,
@@ -260,8 +257,8 @@ mod tests {
             },
         );
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(
             result,
@@ -278,8 +275,8 @@ mod tests {
         state.add_process("job-1".to_string(), make_process(Some(1234)));
         state.save_status("job-1".to_string(), RuntimeStates::Running);
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
-        let result = monitor.monitor(make_job("job-1"));
+        let monitor = make_monitor(make_logger(), make_metrics());
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(result, Ok(RuntimeStates::Running)));
     }
@@ -290,9 +287,9 @@ mod tests {
         let logger = make_logger();
         let messages = Arc::clone(&logger.messages);
 
-        let monitor = make_monitor(state, logger, make_metrics());
+        let monitor = make_monitor(logger, make_metrics());
 
-        let _ = monitor.monitor(make_job("job-1"));
+        let _ = monitor.monitor(&state, make_job("job-1"));
 
         assert!(
             messages
@@ -309,9 +306,9 @@ mod tests {
         let metrics = make_metrics();
         let increments = Arc::clone(&metrics.increments);
 
-        let monitor = make_monitor(state, make_logger(), metrics);
+        let monitor = make_monitor(make_logger(), metrics);
 
-        let _ = monitor.monitor(make_job("job-1"));
+        let _ = monitor.monitor(&state, make_job("job-1"));
 
         assert!(
             increments
@@ -332,16 +329,16 @@ mod tests {
         state.add_process("job-1".to_string(), make_process(Some(1234)));
         state.save_status("job-1".to_string(), RuntimeStates::Error);
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
+        let monitor = make_monitor(make_logger(), make_metrics());
 
-        let result = monitor.monitor(make_job("job-1"));
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         // Error is not a terminal status, so monitoring continues.
         assert!(matches!(result, Ok(RuntimeStates::Running)));
 
         // Running does not overwrite the previously saved Error status.
         assert!(matches!(
-            monitor.runtime_state.get_status("job-1"),
+            state.get_status("job-1"),
             Some(RuntimeStates::Error)
         ));
     }
@@ -354,9 +351,9 @@ mod tests {
         let state = RuntimeState::new();
         state.add_process("job-1".to_string(), make_process(Some(1234)));
 
-        let monitor = make_monitor(state, make_logger(), make_metrics());
+        let monitor = make_monitor(make_logger(), make_metrics());
 
-        let result = monitor.monitor(make_job("job-1"));
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(result.is_err());
     }
@@ -374,14 +371,13 @@ mod tests {
         );
 
         let monitor = Monitor::new(
-            state,
             Observability {
                 logger: make_logger(),
                 metrics: make_metrics(),
             },
         );
 
-        let result = monitor.monitor(make_job("job-1"));
+        let result = monitor.monitor(&state, make_job("job-1"));
 
         assert!(matches!(result, Ok(RuntimeStates::Error)));
     }

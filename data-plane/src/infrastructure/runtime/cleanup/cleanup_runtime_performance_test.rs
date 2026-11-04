@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod concurrency_tests {
     use crate::{
@@ -104,7 +103,7 @@ mod concurrency_tests {
     }
 
     fn create_cleanup_runtime() -> (
-        CleanupRuntime<Arc<RuntimeState>, TestLogger, TestMetrics>,
+        CleanupRuntime<TestLogger, TestMetrics>,
         Arc<RuntimeState>,
         TestLogger,
         TestMetrics,
@@ -121,10 +120,7 @@ mod concurrency_tests {
 
         let telemetry = CleanupRuntimeTelemetry::new(observability);
 
-        let cleanup = CleanupRuntime::new(
-            Arc::clone(&runtime_state),
-            telemetry,
-        );
+        let cleanup = CleanupRuntime::new(telemetry);
 
         (cleanup, runtime_state, logger, metrics)
     }
@@ -162,9 +158,12 @@ mod concurrency_tests {
             for i in 0..100 {
                 let job_id = format!("job-{}", i);
                 let cleanup = &cleanup;
+                let runtime_state = &runtime_state;
 
                 handles.push(scope.spawn(move || {
-                    cleanup.cleanup(create_job(&job_id)).unwrap();
+                    cleanup
+                        .cleanup(runtime_state, create_job(&job_id))
+                        .unwrap();
                 }));
             }
 
@@ -206,9 +205,12 @@ mod concurrency_tests {
 
             for _ in 0..20 {
                 let cleanup = &cleanup;
+                let runtime_state = &runtime_state;
 
                 handles.push(scope.spawn(move || {
-                    cleanup.cleanup(create_job(job_id)).unwrap();
+                    cleanup
+                        .cleanup(runtime_state, create_job(job_id))
+                        .unwrap();
                 }));
             }
 
@@ -221,7 +223,6 @@ mod concurrency_tests {
         assert!(!runtime_state.contains_process(job_id));
         assert!(!runtime_state.contains_stack(job_id));
     }
-    
 }
 
 
@@ -250,7 +251,7 @@ mod performance_tests {
 
     use std::{
         collections::HashMap,
-        sync::{Arc, Mutex},
+        sync::Arc,
         thread,
         time::Instant,
     };
@@ -291,7 +292,7 @@ mod performance_tests {
     }
 
     fn create_cleanup_runtime() -> (
-        CleanupRuntime<Arc<RuntimeState>, TestLogger, TestMetrics>,
+        CleanupRuntime<TestLogger, TestMetrics>,
         Arc<RuntimeState>,
     ) {
         let state = Arc::new(RuntimeState::new());
@@ -302,7 +303,7 @@ mod performance_tests {
         };
 
         let telemetry = CleanupRuntimeTelemetry::new(observability);
-        let cleanup = CleanupRuntime::new(Arc::clone(&state), telemetry);
+        let cleanup = CleanupRuntime::new(telemetry);
 
         (cleanup, state)
     }
@@ -326,7 +327,11 @@ mod performance_tests {
         }
     }
 
-    fn print_results(label: &str, operations: usize, elapsed: std::time::Duration) {
+    fn print_results(
+        label: &str,
+        operations: usize,
+        elapsed: std::time::Duration,
+    ) {
         let seconds = elapsed.as_secs_f64();
         let throughput = operations as f64 / seconds;
         let average = seconds * 1_000_000.0 / operations as f64;
@@ -349,7 +354,9 @@ mod performance_tests {
         let start = Instant::now();
 
         for i in 0..operations {
-            cleanup.cleanup(create_job(format!("job-{i}"))).unwrap();
+            cleanup
+                .cleanup(&state, create_job(format!("job-{i}")))
+                .unwrap();
         }
 
         let elapsed = start.elapsed();
@@ -378,6 +385,7 @@ mod performance_tests {
 
                 for thread_id in 0..thread_count {
                     let cleanup = &cleanup;
+                    let state = &state;
 
                     handles.push(scope.spawn(move || {
                         for i in 0..operations_per_thread {
@@ -386,7 +394,9 @@ mod performance_tests {
                                 thread_id * operations_per_thread + i
                             );
 
-                            cleanup.cleanup(create_job(job_id)).unwrap();
+                            cleanup
+                                .cleanup(state, create_job(job_id))
+                                .unwrap();
                         }
                     }));
                 }

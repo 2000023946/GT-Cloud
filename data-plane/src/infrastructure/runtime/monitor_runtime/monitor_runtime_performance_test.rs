@@ -94,7 +94,6 @@ fn monitor_performance_with_mock_waitpid() {
     );
 
     let monitor = Monitor::with_waitpid(
-        state,
         Observability {
             logger: PerformanceLogger,
             metrics: PerformanceMetrics,
@@ -106,14 +105,14 @@ fn monitor_performance_with_mock_waitpid() {
 
     // Warm up before measuring.
     for _ in 0..1_000 {
-        let result = monitor.monitor(job.clone());
+        let result = monitor.monitor(&state, job.clone());
         assert!(matches!(result, Ok(RuntimeStates::Running)));
     }
 
     let start = Instant::now();
 
     for _ in 0..ITERATIONS {
-        let result = monitor.monitor(job.clone());
+        let result = monitor.monitor(&state, job.clone());
         assert!(matches!(result, Ok(RuntimeStates::Running)));
     }
 
@@ -138,7 +137,7 @@ fn monitor_concurrent_performance_4_8_16_threads() {
     const ITERATIONS_PER_THREAD: u32 = 100_000;
 
     for thread_count in [4, 8, 16] {
-        let state = RuntimeState::new();
+        let state = Arc::new(RuntimeState::new());
 
         state.add_process(
             "job-1".to_string(),
@@ -146,7 +145,6 @@ fn monitor_concurrent_performance_4_8_16_threads() {
         );
 
         let monitor = Arc::new(Monitor::with_waitpid(
-            state,
             Observability {
                 logger: PerformanceLogger,
                 metrics: PerformanceMetrics,
@@ -161,6 +159,7 @@ fn monitor_concurrent_performance_4_8_16_threads() {
 
         for _ in 0..thread_count {
             let monitor = Arc::clone(&monitor);
+            let state = Arc::clone(&state);
             let job = job.clone();
             let barrier = Arc::clone(&barrier);
 
@@ -169,7 +168,7 @@ fn monitor_concurrent_performance_4_8_16_threads() {
                 barrier.wait();
 
                 for _ in 0..ITERATIONS_PER_THREAD {
-                    let result = monitor.monitor(job.clone());
+                    let result = monitor.monitor(&state, job.clone());
 
                     assert!(matches!(
                         result,
