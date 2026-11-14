@@ -30,6 +30,14 @@ where
     L: Logger,
     M: Metrics,
 {
+    pub fn new(
+        observability: Observability<L, M>,
+    ) -> Self {
+        Self {
+            observability,
+        }
+    }
+    
     pub fn start(
         &self,
         state: &RuntimeState,

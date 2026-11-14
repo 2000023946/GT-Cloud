@@ -7,6 +7,11 @@ pub struct WorkingDirectoryManager {
 }
 
 impl WorkingDirectoryManager {
+    pub fn new() -> Self { 
+        Self {
+            root: "/tmp/working_directory".to_string(),
+        }
+    }
     pub fn get_directory(&self, job_id: &str) -> String {
         format!("{}/{}", self.root, job_id)
     }

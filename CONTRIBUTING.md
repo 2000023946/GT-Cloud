@@ -28,7 +28,6 @@ Every meaningful adapter/component must have:
 When applicable:
 
 * [ ] Concurrency tests
-* [ ] Performance/load tests
 * [ ] Integration tests
 * [ ] End-to-end tests
 
