@@ -9,4 +9,4 @@ RUN rustup component add llvm-tools-preview \
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-CMD ["sh", "-c", "cargo llvm-cov clean && cargo llvm-cov --workspace --all-features --ignore-filename-regex '.*_test\\.rs$' --fail-under-lines 95 -- --skip performance"]
+CMD ["sh", "-c", "cargo llvm-cov clean && cargo llvm-cov --workspace --all-features --ignore-filename-regex '.*_test\\.rs$' --fail-under-lines 95 -- --skip performance --test-threads=1"]

@@ -3,9 +3,13 @@
 use std::{
     fs::{File, OpenOptions},
     io::Write,
-    os::unix::process::CommandExt,
     path::Path,
-    process::{Command, Stdio},
+};
+
+#[cfg(target_os = "linux")]
+use super::process_executor::{
+    LinuxProcessExecutor,
+    ProcessExecutor,
 };
 
 #[cfg(target_os = "linux")]
@@ -49,6 +53,7 @@ pub fn append_exec_error(
 
 #[cfg(target_os = "linux")]
 impl ChildProcess {
+    /// C entry point used by the runtime.
     pub extern "C" fn run(arg: *mut libc::c_void) -> libc::c_int {
         if arg.is_null() {
             eprintln!("ChildProcess received a null context");
@@ -59,6 +64,17 @@ impl ChildProcess {
             Box::from_raw(arg as *mut ChildProcess)
         };
 
+        Self::run_with_executor(context, &LinuxProcessExecutor)
+    }
+
+    /// Internal execution path with an injectable process executor.
+    ///
+    /// Tests can supply a mock executor without replacing the test process.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn run_with_executor(
+        context: Box<ChildProcess>,
+        executor: &dyn ProcessExecutor,
+    ) -> libc::c_int {
         let log_directory = context
             .working_directory
             .as_deref()
@@ -89,35 +105,24 @@ impl ChildProcess {
             }
         };
 
-        let mut command = Command::new(&context.program);
-
-        command
-            .args(&context.args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::from(stdout_file))
-            .stderr(Stdio::from(stderr_file));
-
-        if let Some(directory) = &context.working_directory {
-            command.current_dir(directory);
-        }
-
-        command.env_clear();
-
-        for (key, value) in &context.environment {
-            command.env(key, value);
-        }
-
-        // Replace this process with the requested application.
-        // This returns only if exec fails.
-        let error = command.exec();
-
-        append_exec_error(
-            &stderr_path,
+        match executor.execute(
             &context.program,
             &context.args,
-            &error,
-        );
-
-        127
+            context.working_directory.as_deref(),
+            &context.environment,
+            stdout_file,
+            stderr_file,
+        ) {
+            Ok(()) => 0,
+            Err(error) => {
+                append_exec_error(
+                    &stderr_path,
+                    &context.program,
+                    &context.args,
+                    &error,
+                );
+                127
+            }
+        }
     }
 }

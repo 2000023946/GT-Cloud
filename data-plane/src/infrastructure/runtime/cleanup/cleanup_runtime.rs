@@ -1,3 +1,4 @@
+
 use crate::{
     domain::job::Job,
     infrastructure::runtime::{
@@ -12,38 +13,18 @@ pub struct CleanupRuntime<L: Logger, M: Metrics> {
 }
 
 impl<L: Logger, M: Metrics> CleanupRuntime<L, M> {
-    pub fn new(
-        telemetry: CleanupRuntimeTelemetry<L, M>,
-    ) -> Self {
+    pub fn new(telemetry: CleanupRuntimeTelemetry<L, M>) -> Self {
         Self { telemetry }
     }
 
-    pub fn cleanup(
-        &self,
-        state: &RuntimeState,
-        job: Job,
-    ) -> Result<(), String> {
+    pub fn cleanup(&self, state: &RuntimeState, job: Job) -> Result<(), String> {
         let job_id = job.id;
 
-        let result = (|| -> Result<(), String> {
-            // Remove process state
-            state.remove_process(&job_id);
+        state.remove_process(&job_id);
+        state.remove_stack(&job_id);
 
-            // Remove child stack
-            state.remove_stack(&job_id);
+        self.telemetry.log_cleanup(&job_id);
 
-            Ok(())
-        })();
-
-        match result {
-            Ok(()) => {
-                self.telemetry.log_cleanup(&job_id);
-                Ok(())
-            }
-            Err(error) => {
-                self.telemetry.log_failure(&job_id, &error);
-                Err(error)
-            }
-        }
+        Ok(())
     }
 }
