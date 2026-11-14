@@ -1,3 +1,7 @@
 data-plane/target/*
+<<<<<<< HEAD
 control-plane/coverage.out
 data-plane/coverage-html/*
+=======
+control-plane/coverage.out
+>>>>>>> origin/main
