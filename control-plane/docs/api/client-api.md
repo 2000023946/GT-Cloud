@@ -13,26 +13,31 @@ operations, models, resource/status queries, errors, authentication, and communi
 flows, with no implementation code. Worker transport and scheduling/networking/
 observability internals remain outside this document.
 
-The issue explicitly requests CRUD and redeploy for systems, services, and deployments.
-**Reviewer agreement required:** this draft proposes service create/update/delete
-through complete system uploads, deployment creation/deletion with its service,
-and service redeploy through its deployment. The service read-only API does not
-independently satisfy that wording unless reviewers approve this hierarchical mapping.
-Otherwise direct operations need a follow-up revision before the spec is ready.
+The client-facing hierarchy is system/service/replica. Services expose scaling and
+rollout state; deployments and workers remain internal implementation concepts.
+No public worker, cluster capacity, or deployment routes/identifiers are exposed.
+
+**Proposed issue-scope change for reviewer agreement:** #26 originally requests
+worker/capacity queries and explicit deployment operations. This revision replaces
+them with service management and workload-specific status/metrics. Capacity shortages
+remain visible through service status reasons such as INSUFFICIENT_CAPACITY.
+Service creation/deletion is now supported directly within a system.
 
 ## 2. Concepts and workloads
 
-`User -> System -> Service -> Deployment -> Replica -> Worker`
+`User -> System -> Service -> Replica`
 
 A system groups applications submitted together. A service describes application
-code/command, per-replica resources, networking and workload type. Its deployment
-owns desired scale and execution revision. Replicas are individual execution attempts
-placed on workers. Resource requests describe allocation; usage describes observation.
+code/command, per-replica resources, networking and workload type. Services expose desired scale and execution revision. Replicas are individual execution
+attempts. Internally, one deployment per service remains authoritative for scale and
+reconciliation; application logic maps that state into service responses rather than
+maintaining two independent copies. Resource requests describe allocation; metrics
+describe observations. Multiple simultaneous deployments/canaries are outside V1.
 
 **Author decision:** support both long-running services and one-shot jobs. Add
 `workloadType: SERVICE | JOB` to service responses and the eventual configuration
-schema. Systems remain the submission unit. A job is a finite workload inside a
-system, not a synonym for any running service. One deployment belongs to each service.
+schema. Systems group workloads; services can also be submitted independently within a system. A job is a finite workload inside a
+system, not a synonym for any running service. One internal deployment belongs to each service.
 The existing client Job model must be adapted to this hierarchy.
 
 **Proposed job contract, requiring worker/reconciliation owner agreement:**
@@ -53,7 +58,7 @@ The existing client Job model must be adapted to this hierarchy.
 ## 3. Transport, authentication, and errors
 
 Proposed transport: HTTP/JSON under /v1, camelCase field names, UPPER_SNAKE_CASE enums,
-opaque server-assigned IDs, RFC 3339 UTC timestamps. System uploads use multipart/form-data.
+opaque server-assigned IDs, RFC 3339 UTC timestamps. System and service uploads use multipart/form-data.
 Unknown request fields are rejected; clients ignore unknown response fields. Breaking
 changes require a new API version. Nullable fields are present as null; final page
 tokens are omitted. Examples are illustrative, not exhaustive schemas.
@@ -61,8 +66,7 @@ tokens are omitted. Examples are illustrative, not exhaustive schemas.
 Proposed authentication: Authorization: Bearer <token> on every request. Server derives
 ownership from credentials, never input. Users may access only their systems and
 descendants, including logs/metrics. Lists are ownership-filtered before pagination.
-Worker/capacity summaries are readable by any authenticated user without management
-addresses. Token issuance/expiry and GT SSO belong to a separate auth contract.
+Token issuance/expiry and GT SSO belong to a separate auth contract.
 
 All errors use one body:
 
@@ -109,7 +113,7 @@ resource existence is not leaked.
 | Redeploy | `POST /v1/systems/{systemId}:redeploy` | `202` + system |
 
 Create additionally returns Location: /v1/systems/{id}. Delete returns the system
-with DELETING status. Update replaces complete uploaded input, subject to preserved
+with DELETING status. Update authoritatively replaces complete uploaded input, subject to preserved
 scaling settings in section 6. Actions accept no body.
 
 System responses contain id, name, userId, createdAt, updatedAt, services (IDs), and
@@ -119,91 +123,111 @@ status. Create requires name/code/config multipart parts; update requires code/c
 
 | Operation | Method and path | Success |
 | --- | --- | --- |
-| List (all) | `GET /v1/services?systemId={id}` | `200` + page |
-| Get | `GET /v1/services/{serviceId}` | `200` + service |
+| Create | `POST /v1/systems/{systemId}/services` | `202` + service and Location |
+| List | `GET /v1/systems/{systemId}/services` | `200` + page |
+| Get | `GET /v1/systems/{systemId}/services/{serviceId}` | `200` + service |
+| Replace code/config | `PUT /v1/systems/{systemId}/services/{serviceId}` | `202` + service |
+| Change scale | `PATCH /v1/systems/{systemId}/services/{serviceId}` | `202` + service |
+| Delete | `DELETE /v1/systems/{systemId}/services/{serviceId}` | `202` + deleting service |
+| Redeploy | `POST /v1/systems/{systemId}/services/{serviceId}:redeploy` | `202` + service |
+| Stop | `POST /v1/systems/{systemId}/services/{serviceId}:stop` | `202` + service |
+
+Create/PUT use multipart code/config uploads scoped to exactly one service. Create
+requires name, unique within the system; PUT cannot rename or change workload type.
+Create returns Location for the nested service URL. PATCH accepts only desiredReplicas
+and autoscale; code, command, resource requests, and networking change through PUT.
+PUT preserves existing scaling settings. Actions accept no body. A service mutation
+never changes sibling services; system replacement may change all services.
 
 Service responses contain id, name, systemId, workloadType, app {command},
-resources {cpu, memory}, network [{protocol, port, direction}], and deploymentId.
-Do not expose internal app.codePath. New resources require positive allocations.
-Protocol/port validation depends on the networking contract; TCP/UDP and integer
-ports 1-65535 are proposed. CPU representation remains unresolved (section 10).
+resources {cpu, memory}, network [{protocol, port, direction}], desiredReplicas,
+autoscale {enabled, minReplicas, maxReplicas, cpuThreshold}, generation,
+observedGeneration, revision, converged, status, reason, message, and replicas
+{desired, pending, running, completed, failed, stopped}. No deploymentId is exposed.
+Desired settings and observed replica counts remain distinct.
 
-### 4.3 Deployments
+New resource allocations must be positive. Proposed network protocols are TCP/UDP,
+ports are integers 1-65535, and direction is INBOUND/OUTBOUND; runtime support must
+align with networking. Counts are integers, with proposed desired range 0-100.
+Autoscale threshold is in (0,1]; its denominator requires monitoring agreement.
+Do not expose app.codePath. CPU representation remains unresolved (section 10).
 
-| Operation | Method and path | Success |
-| --- | --- | --- |
-| List | `GET /v1/deployments?serviceId={id}` | `200` + page |
-| Get | `GET /v1/deployments/{deploymentId}` | `200` + deployment |
-| Update | `PATCH /v1/deployments/{deploymentId}` | `202` + deployment |
-| Redeploy | `POST /v1/deployments/{deploymentId}:redeploy` | `202` + deployment |
-| Stop | `POST /v1/deployments/{deploymentId}:stop` | `202` + deployment |
-
-Deployment responses contain id, serviceId, desiredReplicas, autoscale
-{enabled, minReplicas, maxReplicas, cpuThreshold}, generation, observedGeneration,
-revision, converged, status, reason, message, and replicas
-{desired, pending, running, completed, failed, stopped}.
-PATCH accepts only desiredReplicas and autoscale. Counts are integers; proposed
-limit is 0-100 desired replicas. Autoscale threshold is in (0,1]; its denominator
-requires monitoring agreement. Lifecycle and merge rules are in section 6.
-
-### 4.4 Replicas
+### 4.3 Replicas
 
 | Operation | Method and path | Success |
 | --- | --- | --- |
-| List | `GET /v1/replicas?deploymentId={id}` | `200` + page |
-| Get | `GET /v1/replicas/{replicaId}` | `200` + replica |
+| List | `GET /v1/systems/{systemId}/services/{serviceId}/replicas` | `200` + page |
+| Get | `GET /v1/systems/{systemId}/services/{serviceId}/replicas/{replicaId}` | `200` + replica |
 
-Replica responses contain id, deploymentId, revision, workerId, status,
-endpoints [{address, port, protocol}], startedAt, finishedAt, exitCode, reason,
-and message. Nullability and status rules are in section 7. No restartCount is
-exposed because each execution attempt receives a new replica ID.
+Responses contain id, systemId, serviceId, revision, status, endpoints
+[{address, port, protocol}], startedAt, finishedAt, exitCode, reason, and message.
+No workerId or deploymentId is exposed. Each execution attempt receives a new ID.
+Endpoints are informational, not a public reachability guarantee.
 
-### 4.5 Workers and capacity
+### 4.4 Metrics
 
-| Operation | Method and path | Success |
-| --- | --- | --- |
-| List | `GET /v1/workers` | `200` + page |
-| Get | `GET /v1/workers/{workerId}` | `200` + worker |
-| Cluster capacity | `GET /v1/capacity` | `200` + summary |
+| Scope | Method and path |
+| --- | --- |
+| System | `GET /v1/systems/{systemId}/metrics` |
+| Service | `GET /v1/systems/{systemId}/services/{serviceId}/metrics` |
+| Replica | `GET /v1/systems/{systemId}/services/{serviceId}/replicas/{replicaId}/metrics` |
 
-Worker responses contain id, status, timestamp, capacity {cpu,memory}, allocated
-{cpu,memory}, and replicaCount. Status is UNKNOWN, READY, BUSY, or OFFLINE.
-Capacity responses contain timestamp, capacity, allocated, and available, each
-resource object containing cpu/memory. See freshness/allocation rules in section 9.
+Metrics are the single numeric observation API, including CPU/memory consumption.
+There are no separate usage endpoints. Resource requests remain configuration in
+service responses; metrics can report allocations alongside observed consumption.
 
-### 4.6 Usage
-
-GET /v1/replicas/{id}/usage, GET /v1/deployments/{id}/usage, and
-GET /v1/services/{id}/usage return 200 with the latest measurement envelope:
+**Proposed query contract:** no from/to means latest available samples. Historical
+queries require both from and to (RFC 3339 UTC, from inclusive, to exclusive, from < to,
+no future to). Invalid combinations return 400. Both modes use the same envelope:
 
 ```json
 {
-  "scope": "DEPLOYMENT",
-  "id": "dep_1",
-  "timestamp": null,
-  "complete": false,
-  "expectedReplicas": 2,
-  "measuredReplicas": 1,
-  "cpu": { "usage": null, "allocated": 2 },
-  "memory": { "usage": null, "allocated": 2048 },
-  "replicas": [
-    { "replicaId": "rep_1", "timestamp": "2026-10-12T04:30:00Z", "stale": false, "cpu": { "usage": 0.5 }, "memory": { "usage": 512 } },
-    { "replicaId": "rep_2", "timestamp": null, "stale": false, "cpu": { "usage": null }, "memory": { "usage": null } }
+  "scope": "SERVICE",
+  "systemId": "sys_1",
+  "serviceId": "svc_1",
+  "replicaId": null,
+  "mode": "LATEST",
+  "series": [
+    {
+      "name": "memory.usage",
+      "unit": "bytes",
+      "labels": { "serviceId": "svc_1", "replicaId": "rep_1", "revision": 2 },
+      "points": [{ "timestamp": "2026-11-13T12:00:00Z", "value": 512, "stale": false, "complete": true, "expectedReplicas": 1, "measuredReplicas": 1 }]
+    }
   ]
 }
 ```
 
-Usage is an instantaneous/latest query, not a historical series. Section 9 defines
-aggregation and missing data. CPU numbers are placeholders until units are agreed.
+System scope has null serviceId/replicaId; service scope has null replicaId.
+Replica series identify service, replica and revision. Aggregate series identify
+system and, when applicable, service; an aggregate across revisions has null revision.
+Missing values use null, not zero. System/service queries aggregate visible descendant
+replicas; historical queries may contain retained past revisions. Aggregation and
+stale-data rules are in section 9.
 
-### 4.7 Logs and metrics
+This envelope and query shape are proposals for alignment with #29/#30. Those specs
+must settle metric names, CPU units, sampling/resolution, maximum time span, history
+pagination/bounds, retention, and treatment of historical gaps. History is not ready
+to implement until those limits are defined; no unbounded response is implied.
 
-Reserved routes: GET /v1/deployments/{id}/logs,
-GET /v1/replicas/{id}/logs, GET /v1/deployments/{id}/metrics.
-Ownership checks happen before querying/proxying backends. Shapes, time-range filters,
-pagination, streaming and retention depend on #29/#30. These routes are not ready
-for implementation until those contracts are linked here. Workload-status polling
-does not preclude a separate live-log streaming contract.
+### 4.5 Logs
+
+| Scope | Method and path |
+| --- | --- |
+| System | `GET /v1/systems/{systemId}/logs` |
+| Service | `GET /v1/systems/{systemId}/services/{serviceId}/logs` |
+| Replica | `GET /v1/systems/{systemId}/services/{serviceId}/replicas/{replicaId}/logs` |
+
+Logs remain separate from numeric metrics. System logs aggregate descendant services;
+service logs aggregate replicas, including retained past revisions. Entries identify
+timestamp, systemId, serviceId, replicaId, revision, stream and message. Application
+severity is nullable where stdout/stderr cannot supply one. No worker/deployment IDs
+are exposed. Apply ownership and ancestry checks before backend queries.
+
+Proposed filters are from/to (RFC 3339 UTC), revision, pageSize and pageToken.
+Exact envelope, ordering/tie breakers, filtering, pagination, retention, and optional
+live following belong to #29/#30 and must be linked before implementation. Status
+polling does not imply a live log streaming implementation.
 
 ## 5. Uploads and request validation
 
@@ -215,10 +239,17 @@ symbolic links, or duplicate normalized paths.
 
 Require exactly one code and config part, plus name on create. Reject duplicate/
 unknown parts with 400. Proposed names match `[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?`.
-Names are immutable; reject a name part on update. At least one uniquely named
-service is required. The archive-format/config-schema specification must define
+Names are immutable; reject a name part on update. System uploads require at least one uniquely named
+service. Deleting the last service independently leaves an empty STOPPED system.
+The same archive limits apply to service create/PUT; each config must describe exactly
+one service whose name matches the create part or existing service on PUT. Duplicate
+service names, including names awaiting deletion, return 409. The archive-format/config-schema specification must define
 layout, filenames, relative code references, workload types, and defaults. No such
 contract was identified in this checkout; this remains a separate required dependency.
+
+Service creation needs name, system ID, and authenticated-owner context; service
+update/delete need system and service IDs. Service archive/config encoding must be
+added to the separate format spec rather than inferred by clients.
 
 SubmitSystemRequest needs name and authenticated-owner context; UpdateSystemRequest
 needs target system ID and owner context. Path supplies the ID, authentication
@@ -229,17 +260,21 @@ not provide a complete mapping of this API.
 
 **Author decisions:**
 
-* Match services by name. Retained names keep service/deployment IDs; additions get
+* System PUT is authoritative for the complete service set, including services
+  previously added with service POST. Omitted services are deleted. Service PUT affects
+  only its target. Preserve each service's accepted artifacts independently so a
+  sibling mutation cannot discard its code.
+* Match services by name. Retained names keep service IDs and their internal deployment identities; additions get
   new IDs; removals shut down and are removed after cleanup. Renames remove/create.
-* Preserve current deployment replica count and all autoscaling settings during an
-  upload, even if uploaded defaults differ. Defaults initialize new deployments only.
-* Stop all old replicas of an affected deployment before starting replacements;
+* Preserve current service replica count and all autoscaling settings during an
+  upload, even if uploaded defaults differ. Defaults initialize new services only.
+* Stop all old replicas of an affected service before starting replacements;
   downtime is allowed. Shutdown must be confirmed, or old execution safely isolated,
-  before replacement. Shutdown failure leaves the deployment unconverged with a reason.
+  before replacement. Shutdown failure leaves the service unconverged with a reason.
 * Stop atomically disables autoscaling and sets count zero. Other autoscale fields
   are preserved. Resume by setting a positive count; explicitly re-enable autoscaling
   if wanted. Repeated stop is harmless and does not repeatedly increment generation.
-* Order accepted mutations per system, including its deployments. Last successfully
+* Order accepted mutations per system, including its services. Last successfully
   validated and durably accepted write wins for overlapping fields. Failed requests
   never supersede accepted input; stale revisions are not rejected in V1.
 
@@ -250,8 +285,8 @@ addition in a later update. System replacement validates the entire new input
 before acceptance. Retained scaling settings also apply to completed jobs.
 
 Redeploy uses latest accepted code/config and starts a fresh revision, preserving
-scale. Completed/failed jobs start a fresh batch. Stopped deployments remain stopped;
-redeploy of a stopped deployment or entirely stopped system returns 409. Repeated
+scale. Completed/failed jobs start a fresh batch. Stopped services remain stopped;
+redeploy of a stopped service or entirely stopped system returns 409. Repeated
 redeploy can restart work again; clients inspect state before retrying uncertain actions.
 
 Delete is terminal once accepted. Update/scale/stop/redeploy during deletion returns
@@ -262,8 +297,9 @@ as deleting until cleaned up.
 
 PATCH merges nested autoscale fields, preserves omitted fields, and rejects null,
 unknown fields, and empty patches. Validate the resulting object atomically. Manual
-scale while autoscaling remains enabled returns 409; disable it in the same PATCH
-or use stop. Proposed new-deployment defaults: one replica, autoscale disabled,
+scale while autoscaling remains enabled returns 409; enabled autoscaling also requires
+desiredReplicas within min/max. Disable it in the same PATCH
+or use stop. Proposed new-service defaults: one replica, autoscale disabled,
 min 1, max 100, CPU threshold 0.7. Min/max are integers 1–100 with min <= max.
 
 ## 7. Acceptance, progress, and statuses
@@ -274,25 +310,26 @@ failure before acceptance. Invalid or failed replacement preserves previous acce
 state. Staged internal artifacts may be cleaned up later. Persistence/queue mechanics
 are outside this API specification.
 
-Deployments add `revision`, `converged`, and nullable `reason`/`message` to the existing
-response. Generation increments on accepted desired-state changes. Revision increments
+Services expose `generation` (desired-state version), `observedGeneration` (latest
+version processed by reconciliation), `revision`, `converged`, and nullable
+`reason`/`message`. Generation increments on accepted desired-state changes. Revision increments
 on execution replacement/redeploy, not ordinary service scaling. Replicas carry
 `revision`. Counts describe the current revision; old replicas remain listable.
 
 Generation equality means processed, not successful. Converged requires latest
 generation processed, no superseded active replicas, and target satisfaction:
 SERVICE has desired current replicas running; JOB has all requested executions
-completed; stopped deployment has no pending/running replicas. Clients poll
+completed; stopped service has no pending/running replicas. Clients poll
 convergence or failure, not generation equality. Suggested polling is two seconds,
 backing off to ten; a client timeout never implies server rollback.
 
 Replica status: PENDING -> RUNNING -> COMPLETED | FAILED | STOPPED. Pending attempts
 may fail or stop. Each attempt gets a new ID; replace restartCount with nullable
-finishedAt/exitCode/reason/message. workerId is nullable before placement and startedAt
-before execution. Replace endpoint with `endpoints: [{address, port, protocol}]`, empty
+finishedAt/exitCode/reason/message. startedAt is nullable before execution;
+finishedAt and exitCode are nullable when unavailable. Replace endpoint with `endpoints: [{address, port, protocol}]`, empty
 until known, to support multiple ports. Addresses do not guarantee public reachability.
 
-Evaluate deployment rules in order; active means pending/running, current means
+Evaluate service rules in order; active means pending/running, current means
 current revision. Historical failures do not poison a new revision.
 
 | Status | Rule |
@@ -312,12 +349,13 @@ generation. Service failures may recover; failed jobs are terminal for that revi
 Example reasons: INSUFFICIENT_CAPACITY, START_FAILED, WORKER_LOST, PROCESS_EXITED,
 STOP_FAILED. Clients tolerate unknown future reasons and never parse message text.
 
-System deletion takes precedence (DELETING). Otherwise map deployment PENDING and
+System deletion takes precedence (DELETING). Otherwise map service PENDING and
 UPDATING to DEPLOYING, then select the first present status:
 FAILED > DEGRADED > STOPPING > DEPLOYING > RUNNING > COMPLETED > STOPPED.
 A running service plus completed job is RUNNING; completed jobs plus stopped services
-is COMPLETED. Ignore fully removed services. Empty transitional systems remain
-DEPLOYING until updates/removal settle. System responses therefore also permit
+is COMPLETED. Ignore fully removed services. An empty system is STOPPED after cleanup; empty transitional systems remain
+DEPLOYING until updates/removal settle. A DELETING child maps to system DEPLOYING
+unless the system itself is being deleted. System responses therefore also permit
 STOPPING and COMPLETED. Client COMPLETED maps to completed jobs, not an unsupported state.
 
 ## 8. Idempotency and retry behavior
@@ -325,20 +363,24 @@ STOPPING and COMPLETED. Client COMPLETED maps to completed jobs, not an unsuppor
 **Author decision:** support idempotency keys. The following details are proposed.
 The client sends a key; the control plane provides the retry guarantee.
 
-POST /v1/systems requires Idempotency-Key, a client-generated opaque value of 1–128
+Both POST /v1/systems and POST /v1/systems/{systemId}/services require
+Idempotency-Key, a client-generated opaque value of 1–128
 printable ASCII characters per logical submission. Server scope is authenticated
 user + method + path; accepted results are retained at least 24 hours. Equal name
 and identical archive bytes mean equal input; multipart boundaries/filenames do not.
 
-Same key/input replays original 202 body and Location without creating another system,
+Same key/input replays original 202 body and Location without creating another resource,
 even if it later changes or is deleted. Different input returns 409 IDEMPOTENCY_CONFLICT;
 an in-flight equal request returns 409 REQUEST_IN_PROGRESS with Retry-After seconds.
 Authentication is still checked. Validation failures do not consume keys. Acceptance
 and the replay record must be atomic from the client's perspective. After expiry,
 name uniqueness prevents duplicates while the original exists but is not an unlimited
-retry guarantee. Create returns `Location: /v1/systems/{id}`.
+retry guarantee. Create returns the canonical nested resource URL in Location. Service keys are
+scoped to the parent path. Parent ownership/ancestry is checked on every replay; a
+deleted/inaccessible parent returns 404. While a parent is DELETING, new creates
+return 409 but an already accepted keyed request may be replayed after authorization.
 
-Other mutations do not accept keys in V1. Redeploy retries can create another batch;
+Only system/service create operations accept keys in V1. Redeploy retries can create another batch;
 inspect state first. Common errors additionally include 415 UNSUPPORTED_MEDIA_TYPE.
 429/503 responses carry Retry-After seconds. Error code/message/details/requestId
 are required; details may be an empty array. Never expose stack traces or credentials.
@@ -349,22 +391,22 @@ CPU units/representation remain **unknown**; existing examples do not settle the
 Memory bytes are proposed. Agree CPU units, utilization denominator, averaging
 window, and stale-data threshold with resource/monitoring owners before implementation.
 
-Usage adds complete, expectedReplicas, measuredReplicas and per-replica timestamp/
-stale fields. Missing/stale data never counts as zero: aggregate usage is null unless
-all running replicas have fresh samples. Include old revisions still running during
-shutdown. Aggregate timestamp is the oldest fresh sample, or null if incomplete.
-No running replicas means null usage, zero counts, complete false. Allocated sums
-reservations for placed replicas, not desired scale. Replica/service use the same
-envelope with scope REPLICA/SERVICE; replica scope contains one entry. These rules
-supersede the partial aggregation implied by the original usage example.
+Metric points expose complete, expectedReplicas, measuredReplicas, timestamp and
+stale. Missing/stale samples never count as zero: aggregate consumption is null
+unless all expected running replicas have fresh measurements. Include old revisions
+still running during shutdown. Aggregate timestamp is the oldest included fresh
+sample, or null if incomplete. No running replicas means null consumption, zero
+counts, complete false. Allocation metrics sum reservations for placed replicas,
+not desired scale. Preserve per-replica values and revision labels for diagnosis.
+For historical aggregation, freshness/completeness is evaluated at each sample time.
+System aggregates cover all its services; replica scope covers one attempt.
+These contracts replace the former separate usage concept.
 
-Capacity allocated means placed reservations not yet released, including pending
-starts/stops. Available is capacity minus allocated across READY/BUSY workers; it
-is advisory, not a placement guarantee. Add nullable observation timestamp to worker
-and capacity responses. Freshness policy remains a monitoring dependency.
-
-Lists default to ascending immutable ID. Parent filters are optional; omission
-lists all caller-owned resources. Foreign/missing explicit parents return 404.
+Lists default to ascending immutable ID. Systems list only caller-owned resources;
+service and replica lists are always scoped by their required path parents. Every
+nested read/mutation/log/metric request verifies ownership AND the full ancestry:
+service belongs to system, replica belongs to service. Missing, foreign, or mismatched
+parents/children return 404, including when a child ID is otherwise accessible.
 Reject unsupported filters and pageSize outside 1–200 with 400. Tokens bind caller
 and filters; invalid/expired tokens return 400 with detail invalid_page_token.
 Proposed lifetime is at least 15 minutes. Listing is not a snapshot under concurrent
@@ -372,7 +414,7 @@ changes; clients may restart/deduplicate by ID. Replica lists optionally filter 
 positive-integer revision. Proposed replica retention is at least 24 hours after
 termination while parent exists; parent deletion may remove records.
 
-All resource/list/log/usage access is ownership checked before pagination or backend
+All resource/list/log/metric access is ownership checked before pagination or backend
 queries. HTTPS is proposed outside local development. Web origin, CORS, and token
 storage need agreement with the client/auth owner; same-origin hosting is not assumed.
 Public service exposure is a separate networking contract. Protocol/port/direction
@@ -385,11 +427,11 @@ service identity, stop-first update, scaling preservation, stop/autoscale intera
 last accepted write wins, idempotency support, and upload-limit defaults.
 
 Before calling the specification ready to guide independent implementation, reviewers
-must agree operation coverage (section 1), finite-job behavior (section 2), status rules (section 7), retry
+must acknowledge the revised issue scope (section 1), finite-job behavior (section 2), status rules (section 7), retry
 lifetimes (section 8), and resource response completeness (section 9). Link separate contracts for
 CPU/resource units, archive/config format, auth issuance/browser integration, public
 exposure, and log/metric schemas/filtering/streaming/retention (#29/#30).
-The 100-replica limit and per-user quotas still require agreement; a per-deployment
+The 100-replica limit and per-user quotas still require agreement; a per-service
 limit alone does not limit total user consumption.
 
 Implementation follow-ups include HTTP/query/mutation use cases; adapting client
@@ -412,18 +454,18 @@ communication and observability adapters. Business rules remain outside HTTP han
 Submit:
   POST /v1/systems + Idempotency-Key + name/code/config
   <- 202 system, Location (durably accepted)
-  GET system and deployments until converged, completed, or failed
+  GET system and nested services until converged, completed, or failed
   If POST times out: retry identical input with SAME key
 
 Scale service:
-  PATCH /v1/deployments/{id} {"desiredReplicas": 5}
-  <- 202 deployment with new generation
-  GET deployment until converged or failure; generation equality alone is insufficient
+  PATCH /v1/systems/{systemId}/services/{serviceId} {"desiredReplicas": 5}
+  <- 202 service with new generation
+  GET service until converged or failure; generation equality alone is insufficient
 
 Inspect failure:
-  GET deployment -> status, reason, message
-  GET /v1/replicas?deploymentId={id}&revision={currentRevision}
-  GET /v1/replicas/{failedId}/logs once observability contract is available
+  GET /v1/systems/{systemId}/services/{serviceId} -> status, reason, message
+  GET /v1/systems/{systemId}/services/{serviceId}/replicas?revision={currentRevision}
+  GET /v1/systems/{systemId}/services/{serviceId}/replicas/{failedId}/logs once observability contract is available
 ```
 
 | Failure | Observable result |
