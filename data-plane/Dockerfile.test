@@ -7,4 +7,4 @@ COPY src ./src
 
 RUN cargo build --release
 
-CMD ["cargo", "test", "--release", "runtime_facade_failure_concurrency_test", "--", "--nocapture"]
+CMD ["cargo", "test", "--release", "child_process_test", "--", "--nocapture"]
