@@ -30,6 +30,16 @@ where
     L: Logger,
     M: Metrics,
 {
+    pub fn new(
+        working_directory_manager: WorkingDirectoryManager,
+        observability: Observability<L, M>,
+    ) -> Self {
+        Self {
+            working_directory_manager,
+            observability,
+        }
+    }
+    
     pub fn configure(
         &self,
         state: &RuntimeState,

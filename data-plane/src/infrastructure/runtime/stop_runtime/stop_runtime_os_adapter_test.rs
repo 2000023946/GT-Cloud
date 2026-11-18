@@ -1,9 +1,13 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::runtime::stop_runtime::stop_runtime_os_adapter::{LinuxStopRuntimeOsAdapter, StopRuntimeOsAdapter};
+    use super::*;
+    use std::time::{Duration, Instant};
 
-use super::*;
+    use crate::infrastructure::runtime::stop_runtime::stop_runtime_os_adapter::{
+        LinuxStopRuntimeOsAdapter,
+        StopRuntimeOsAdapter,
+    };
 
     #[test]
     fn test_kill_succeeds_for_current_process_with_signal_zero() {
@@ -21,7 +25,6 @@ use super::*;
     fn test_kill_fails_for_nonexistent_process() {
         let adapter = LinuxStopRuntimeOsAdapter;
 
-        // pid_t::MAX is outside the normal valid PID range on Linux/macOS.
         let result = adapter.kill(libc::pid_t::MAX, 0);
 
         assert_eq!(result, -1);
@@ -37,5 +40,54 @@ use super::*;
 
         assert_eq!(result, -1);
         assert_eq!(error.raw_os_error(), Some(libc::ESRCH));
+    }
+
+    #[test]
+    fn test_waitpid_reaps_terminated_child_process() {
+        let adapter = LinuxStopRuntimeOsAdapter;
+
+        // Create a child process.
+        let child_pid = unsafe { libc::fork() };
+
+        assert!(child_pid >= 0, "Failed to fork child process");
+
+        if child_pid == 0 {
+            // Child exits immediately.
+            unsafe {
+                libc::_exit(0);
+            }
+        }
+
+        // Parent waits for the child to terminate.
+        let mut status: libc::c_int = 0;
+
+        let result = adapter.waitpid(
+            child_pid,
+            &mut status,
+            0,
+        );
+
+        assert_eq!(result, child_pid);
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 0);
+    }
+
+    #[test]
+    fn test_sleep_waits_for_requested_duration() {
+        let adapter = LinuxStopRuntimeOsAdapter;
+
+        let duration = Duration::from_millis(10);
+
+        let start = Instant::now();
+
+        adapter.sleep(duration);
+
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed >= duration,
+            "Sleep returned too early: {:?}",
+            elapsed
+        );
     }
 }

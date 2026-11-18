@@ -28,7 +28,6 @@ where
     L: Logger,
     M: Metrics,
 {
-    pub(crate) runtime_state: RuntimeState,
     pub(crate) observability: Observability<L, M>,
     waitpid_fn: WaitPidFn,
 }
@@ -39,11 +38,10 @@ where
     M: Metrics,
 {
     pub fn new(
-        runtime_state: RuntimeState,
         observability: Observability<L, M>,
     ) -> Self {
         Self {
-            runtime_state,
+            // runtime_state,
             observability,
             waitpid_fn: real_waitpid,
         }
@@ -51,12 +49,11 @@ where
 
     #[cfg(test)]
     pub fn with_waitpid(
-        runtime_state: RuntimeState,
         observability: Observability<L, M>,
         waitpid_fn: WaitPidFn,
     ) -> Self {
         Self {
-            runtime_state,
+            // runtime_state,
             observability,
             waitpid_fn,
         }
@@ -64,6 +61,7 @@ where
 
     pub fn monitor(
         &self,
+        state: &RuntimeState,
         job: Job,
     ) -> Result<RuntimeStates, String> {
         let job_id = job.id;
@@ -72,13 +70,13 @@ where
         self.record_monitoring_metric();
 
         if let Some(status) =
-            self.get_saved_terminal_status(&job_id)
+            self.get_saved_terminal_status(state, &job_id)
         {
             return Ok(status);
         }
 
         let process_state =
-            match self.runtime_state.get_process(&job_id) {
+            match state.get_process(&job_id) {
                 Some(state) => state,
                 None => return Ok(RuntimeStates::NotFound),
             };
@@ -95,7 +93,7 @@ where
         let runtime_states =
             self.get_runtime_states(result, pid, status)?;
 
-        self.save_state(job_id, runtime_states.clone());
+        self.save_state(state, job_id, runtime_states.clone());
 
         Ok(runtime_states)
     }
@@ -117,9 +115,10 @@ where
 
     fn get_saved_terminal_status(
         &self,
+        state: &RuntimeState,
         job_id: &str,
     ) -> Option<RuntimeStates> {
-        if let Some(status) = self.runtime_state.get_status(job_id) {
+        if let Some(status) = state.get_status(job_id) {
             if matches!(
                 status,
                 RuntimeStates::Exited { .. }
@@ -157,6 +156,7 @@ where
 
     fn save_state(
         &self,
+        state: &RuntimeState,
         job_id: String,
         runtime_states: RuntimeStates,
     ) {
@@ -165,7 +165,7 @@ where
             RuntimeStates::Exited { .. }
                 | RuntimeStates::Signaled { .. }
         ) {
-            self.runtime_state
+            state
                 .save_status(job_id, runtime_states);
         }
     }

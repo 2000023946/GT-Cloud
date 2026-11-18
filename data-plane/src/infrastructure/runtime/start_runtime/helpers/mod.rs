@@ -3,6 +3,7 @@ pub mod create_child_process;
 pub mod create_process;
 pub mod create_child_stack;
 pub mod child_process;
+pub mod process_executor;
 
 #[cfg(all(test, target_os = "linux"))]
 pub mod child_process_test;
