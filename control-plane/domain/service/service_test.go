@@ -3,59 +3,79 @@ package service
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/app"
-	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/network"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/resource"
 )
 
-func TestService(t *testing.T) {
-	s := Service{
-		ID:       "service-1",
-		Name:     "api",
-		SystemID: "system-1",
-		App: app.App{
-			ID:       "app-1",
-			CodePath: "/app",
-			Command:  "python3 main.py",
-		},
-		Resources: resource.Resource{
-			CPU:    2,
-			Memory: 4096,
-		},
-		Network: []network.NetworkRule{
-			{
-				Protocol:  "TCP",
-				Port:      8080,
-				Direction: network.Inbound,
-			},
-		},
+func TestCreateService(t *testing.T) {
+	newApp := app.App{
+		ID:       "app-123",
+		CodePath: "job/main.go",
+		Command:  "go run main.go",
 	}
 
-	if s.ID != "service-1" {
-		t.Errorf("expected ID service-1, got %s", s.ID)
+	resources := resource.Resource{
+		CPU:    2,
+		Memory: 512,
 	}
 
-	if s.Name != "api" {
-		t.Errorf("expected Name api, got %s", s.Name)
+	name := "test-service"
+
+	newService := CreateService(newApp, resources, name)
+
+	// Check generated service ID
+	if _, err := uuid.Parse(newService.ID); err != nil {
+		t.Errorf("expected valid service UUID, got %q", newService.ID)
 	}
 
-	if s.SystemID != "system-1" {
-		t.Errorf("expected SystemID system-1, got %s", s.SystemID)
+	// Check generated system ID
+	if _, err := uuid.Parse(newService.SystemID); err != nil {
+		t.Errorf("expected valid system UUID, got %q", newService.SystemID)
 	}
 
-	if s.App.ID != "app-1" {
-		t.Errorf("expected App ID app-1, got %s", s.App.ID)
+	// Check name
+	if newService.Name != name {
+		t.Errorf("expected name %q, got %q", name, newService.Name)
 	}
 
-	if s.Resources.CPU != 2 {
-		t.Errorf("expected CPU 2, got %d", s.Resources.CPU)
+	// Check app
+	if newService.App != newApp {
+		t.Errorf("expected app %+v, got %+v", newApp, newService.App)
 	}
 
-	if s.Resources.Memory != 4096 {
-		t.Errorf("expected Memory 4096, got %d", s.Resources.Memory)
+	// Check desired replicas
+	if newService.DesiredReplicas != 1 {
+		t.Errorf("expected DesiredReplicas 1, got %d", newService.DesiredReplicas)
 	}
 
-	if len(s.Network) != 1 {
-		t.Errorf("expected 1 network rule, got %d", len(s.Network))
+	// Check resources
+	if newService.Resources != resources {
+		t.Errorf("expected resources %+v, got %+v", resources, newService.Resources)
+	}
+
+	// Check network initialization
+	if newService.Network == nil {
+		t.Fatal("expected initialized Network slice, got nil")
+	}
+
+	if len(newService.Network) != 0 {
+		t.Errorf("expected empty Network slice, got %d rules", len(newService.Network))
+	}
+}
+
+func TestCreateService_GeneratesUniqueIDs(t *testing.T) {
+	newApp := app.App{}
+	resources := resource.Resource{}
+
+	firstService := CreateService(newApp, resources, "service-1")
+	secondService := CreateService(newApp, resources, "service-2")
+
+	if firstService.ID == secondService.ID {
+		t.Error("expected unique service IDs")
+	}
+
+	if firstService.SystemID == secondService.SystemID {
+		t.Error("expected unique system IDs")
 	}
 }

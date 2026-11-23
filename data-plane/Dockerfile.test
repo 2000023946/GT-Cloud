@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-
+RUN cargo clean
 RUN cargo build --release
 
-CMD ["cargo", "test", "--release", "process_executor_test", "--", "--nocapture", "--test-threads=1"]
+CMD ["cargo", "test", "--release", "--", "--nocapture", "--test-threads=1"]

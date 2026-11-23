@@ -54,8 +54,8 @@ mod tests {
             },
             status: JobStatus::Received,
             resources: Resource {
-                cpu: 1,
-                memory: 128 * 1024 * 1024,
+                cpu: 1.0,
+                memory: (128 * 1024 * 1024) as f32,
             },
             network: vec![],
         }
@@ -68,14 +68,14 @@ mod tests {
 
         // 1. Configure the job.
         facade
-            .configure(job.clone())
+            .configure(&job)
             .expect("Job configuration failed");
 
         println!("Job configured");
 
         // 2. Start the job.
         facade
-            .start(job.clone())
+            .start(&job)
             .expect("Job start failed");
 
         println!("Job started");
@@ -108,7 +108,7 @@ mod tests {
 
         for attempt in 1..=20 {
             status = facade
-                .monitor(job.clone())
+                .monitor(&job)
                 .expect("Monitoring failed");
 
             if matches!(
@@ -154,7 +154,7 @@ mod tests {
 
         // 7. Clean up the terminated job.
         facade
-            .cleanup(job.clone())
+            .cleanup(&job)
             .expect("Job cleanup failed");
 
         println!("Job cleanup completed");

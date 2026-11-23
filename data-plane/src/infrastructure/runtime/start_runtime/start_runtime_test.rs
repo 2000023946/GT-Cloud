@@ -52,8 +52,8 @@ mod tests {
             name: "runtime-test".to_string(),
             status: JobStatus::Received,
             resources: Resource {
-                cpu: 1,
-                memory: 128,
+                cpu: 1.0,
+                memory: 128.0,
             },
             network: vec![],
         }
@@ -97,7 +97,7 @@ mod tests {
         let state = RuntimeState::new();
 
         let error = runtime
-            .start(&state, create_job())
+            .start(&state, &create_job())
             .expect_err("Runtime should reject non-Linux platforms");
 
         assert_eq!(
@@ -106,14 +106,14 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "linux")]
+    // #[cfg(target_os = "linux")]
     #[test]
     fn configure_runtime_stores_executable_and_arguments() {
         let state = RuntimeState::new();
         let job = create_job();
 
         create_configure_runtime()
-            .configure(&state, job.clone())
+            .configure(&state, &job)
             .expect("Runtime configuration should succeed");
 
         let process = state
@@ -131,14 +131,14 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "linux")]
+    // #[cfg(target_os = "linux")]
     #[test]
     fn starts_job_and_executes_requested_program() {
         let state = RuntimeState::new();
         let job = create_job();
 
         create_configure_runtime()
-            .configure(&state, job.clone())
+            .configure(&state, &job)
             .expect("Configuration failed");
 
         let process = state
@@ -149,7 +149,7 @@ mod tests {
         assert_eq!(process.args, vec!["5".to_string()]);
 
         create_runtime()
-            .start(&state, job.clone())
+            .start(&state, &job)
             .expect("StartRuntime::start() failed");
 
         let pid = state
@@ -207,11 +207,11 @@ mod tests {
         let job = create_job();
 
         create_configure_runtime()
-            .configure(&state, job.clone())
+            .configure(&state, &job)
             .expect("Configuration failed");
 
         create_runtime()
-            .start(&state, job.clone())
+            .start(&state, &job)
             .expect("Runtime failed to start");
 
         let pid = state
@@ -237,7 +237,7 @@ mod tests {
         result;
     }
 
-    #[cfg(target_os = "linux")]
+    // #[cfg(target_os = "linux")]
     #[test]
     fn start_fails_when_job_is_not_configured() {
         let state = RuntimeState::new();
@@ -245,13 +245,13 @@ mod tests {
         let expected = format!("No process state found for job {}", job.id);
 
         let error = create_runtime()
-            .start(&state, job)
+            .start(&state, &job)
             .expect_err("Starting an unconfigured job should fail");
 
         assert_eq!(error, expected);
     }
 
-    #[cfg(target_os = "linux")]
+    // #[cfg(target_os = "linux")]
     #[test]
     fn executes_python_script_and_captures_output() {
         let python_check = Command::new("python3")
@@ -290,8 +290,8 @@ mod tests {
             name: "python-runtime-test".to_string(),
             status: JobStatus::Received,
             resources: Resource {
-                cpu: 1,
-                memory: 128,
+                cpu: 1 as f32,
+                memory: 128 as f32,
             },
             network: vec![],
         };
@@ -301,7 +301,7 @@ mod tests {
 
         let result = (|| {
             configure
-                .configure(&state, job.clone())
+                .configure(&state, &job)
                 .expect("Python runtime configuration failed");
 
             let process = state
@@ -314,7 +314,7 @@ mod tests {
                 .expect("Python working directory missing");
 
             runtime
-                .start(&state, job.clone())
+                .start(&state, &job)
                 .expect("Failed to start Python job");
 
             let stdout_path = Path::new(&working_directory).join("stdout.txt");

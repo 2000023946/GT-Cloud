@@ -2,14 +2,16 @@ package action
 
 import "testing"
 
-func TestStopReplicaAction(t *testing.T) {
-	action := StopReplicaAction{
+func TestStopReplicaAction_IsAction(t *testing.T) {
+	action := &StopReplicaAction{
 		ReplicaID: "replica-123",
 	}
 
 	if action.ReplicaID != "replica-123" {
-		t.Errorf("expected ReplicaID replica-123, got %s", action.ReplicaID)
+		t.Errorf("expected ReplicaID %q, got %q", "replica-123", action.ReplicaID)
 	}
 
-	action.isAction()
+	if !action.isAction() {
+		t.Error("expected isAction() to return true")
+	}
 }

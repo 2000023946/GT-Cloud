@@ -5,4 +5,6 @@ type CreateReplicaAction struct {
 	Count        int
 }
 
-func (CreateReplicaAction) isAction() {}
+func (s *CreateReplicaAction) isAction() bool {
+	return true
+}

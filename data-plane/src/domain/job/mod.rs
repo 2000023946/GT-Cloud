@@ -3,3 +3,6 @@ pub mod job_status;
 
 pub use job::Job;
 pub use job_status::JobStatus;
+
+#[cfg(test)]
+pub mod job_test;

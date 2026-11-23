@@ -4,4 +4,6 @@ type StopReplicaAction struct {
 	ReplicaID string
 }
 
-func (StopReplicaAction) isAction() {}
+func (s *StopReplicaAction) isAction() bool {
+	return true
+}

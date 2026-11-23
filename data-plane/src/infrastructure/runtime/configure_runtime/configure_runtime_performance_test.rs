@@ -58,8 +58,8 @@ fn make_job(id: usize) -> Job {
         name: format!("test-job-{}", id),
         status: JobStatus::Received,
         resources: Resource {
-            cpu: 1,
-            memory: 1024,
+            cpu: 1.0,
+            memory: 1024.0,
         },
         network: Vec::<NetworkRule>::new(),
     }
@@ -83,7 +83,7 @@ fn configure_performance_test() {
             let job = make_job(i);
 
             runtime
-                .configure(&state, job)
+                .configure(&state, &job)
                 .expect("configure should succeed");
         }
 

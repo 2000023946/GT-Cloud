@@ -64,8 +64,8 @@ fn make_job(id: &str) -> Job {
         name: "performance-test".to_string(),
         status: JobStatus::Running,
         resources: Resource {
-            cpu: 1,
-            memory: 1024,
+            cpu: 1.0,
+            memory: 1024.0,
         },
         network: Vec::<NetworkRule>::new(),
     }
@@ -105,14 +105,14 @@ fn monitor_performance_with_mock_waitpid() {
 
     // Warm up before measuring.
     for _ in 0..1_000 {
-        let result = monitor.monitor(&state, job.clone());
+        let result = monitor.monitor(&state, &job);
         assert!(matches!(result, Ok(RuntimeStates::Running)));
     }
 
     let start = Instant::now();
 
     for _ in 0..ITERATIONS {
-        let result = monitor.monitor(&state, job.clone());
+        let result = monitor.monitor(&state, &job);
         assert!(matches!(result, Ok(RuntimeStates::Running)));
     }
 
@@ -160,15 +160,14 @@ fn monitor_concurrent_performance_4_8_16_threads() {
         for _ in 0..thread_count {
             let monitor = Arc::clone(&monitor);
             let state = Arc::clone(&state);
-            let job = job.clone();
             let barrier = Arc::clone(&barrier);
-
+            let job = job.clone();
             handles.push(thread::spawn(move || {
                 // Wait until all threads are ready.
                 barrier.wait();
 
                 for _ in 0..ITERATIONS_PER_THREAD {
-                    let result = monitor.monitor(&state, job.clone());
+                    let result = monitor.monitor(&state, &job);
 
                     assert!(matches!(
                         result,
