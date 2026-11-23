@@ -95,8 +95,8 @@ mod concurrency_tests {
             name: "test-job".to_string(),
             status: JobStatus::Stopped,
             resources: Resource {
-                cpu: 1,
-                memory: 512,
+                cpu: 1.0,
+                memory: 512.0,
             },
             network: Vec::<NetworkRule>::new(),
         }
@@ -162,7 +162,7 @@ mod concurrency_tests {
 
                 handles.push(scope.spawn(move || {
                     cleanup
-                        .cleanup(runtime_state, create_job(&job_id))
+                        .cleanup(runtime_state, &create_job(&job_id))
                         .unwrap();
                 }));
             }
@@ -209,7 +209,7 @@ mod concurrency_tests {
 
                 handles.push(scope.spawn(move || {
                     cleanup
-                        .cleanup(runtime_state, create_job(job_id))
+                        .cleanup(runtime_state, &create_job(job_id))
                         .unwrap();
                 }));
             }
@@ -284,8 +284,8 @@ mod performance_tests {
             name: "test-job".to_string(),
             status: JobStatus::Stopped,
             resources: Resource {
-                cpu: 1,
-                memory: 512,
+                cpu: 1.0,
+                memory: 512.0,
             },
             network: Vec::<NetworkRule>::new(),
         }
@@ -355,7 +355,7 @@ mod performance_tests {
 
         for i in 0..operations {
             cleanup
-                .cleanup(&state, create_job(format!("job-{i}")))
+                .cleanup(&state, &create_job(format!("job-{i}")))
                 .unwrap();
         }
 
@@ -395,7 +395,7 @@ mod performance_tests {
                             );
 
                             cleanup
-                                .cleanup(state, create_job(job_id))
+                                .cleanup(state, &create_job(job_id))
                                 .unwrap();
                         }
                     }));

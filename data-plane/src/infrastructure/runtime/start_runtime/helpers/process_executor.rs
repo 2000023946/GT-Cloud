@@ -1,8 +1,8 @@
 
+use std::{fs::File, io};
+
 #[cfg(target_os = "linux")]
 use std::{
-    fs::File,
-    io,
     os::unix::process::CommandExt,
     process::{Command, Stdio},
 };
