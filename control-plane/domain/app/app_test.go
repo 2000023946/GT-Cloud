@@ -1,23 +1,39 @@
 package app
 
-import "testing"
+import (
+	"testing"
 
-func TestApp(t *testing.T) {
-	a := App{
-		ID:       "app-1",
-		CodePath: "/apps/app-1/",
-		Command:  "python3 main.py",
+	"github.com/google/uuid"
+)
+
+func TestCreateApp(t *testing.T) {
+	codepath := "job/test/main.go"
+	command := "go run main.go"
+
+	newApp := CreateApp(codepath, command)
+
+	if newApp == nil {
+		t.Fatal("expected app, got nil")
 	}
 
-	if a.ID != "app-1" {
-		t.Errorf("expected app ID app-1, got %s", a.ID)
+	if newApp.CodePath != codepath {
+		t.Errorf("expected CodePath %q, got %q", codepath, newApp.CodePath)
 	}
 
-	if a.CodePath != "/apps/app-1/" {
-		t.Errorf("expected code path /apps/app-1/, got %s", a.CodePath)
+	if newApp.Command != command {
+		t.Errorf("expected Command %q, got %q", command, newApp.Command)
 	}
 
-	if a.Command != "python3 main.py" {
-		t.Errorf("expected command python3 main.py, got %s", a.Command)
+	if _, err := uuid.Parse(newApp.ID); err != nil {
+		t.Errorf("expected valid UUID, got %q", newApp.ID)
+	}
+}
+
+func TestCreateApp_GeneratesUniqueIDs(t *testing.T) {
+	firstApp := CreateApp("path1", "command1")
+	secondApp := CreateApp("path2", "command2")
+
+	if firstApp.ID == secondApp.ID {
+		t.Error("expected different IDs, got identical IDs")
 	}
 }

@@ -14,6 +14,9 @@ pub mod runtime_facade_test;
 pub mod runtime_facade_concurrency_test;
 
 #[cfg(test)]
+pub mod runtime_facade_get_pid_test;
+
+#[cfg(test)]
 pub mod runtime_facade_failure_test;
 
 #[cfg(test)]

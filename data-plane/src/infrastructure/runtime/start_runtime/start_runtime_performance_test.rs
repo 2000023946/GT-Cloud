@@ -52,8 +52,8 @@ fn create_job(id: String) -> Job {
         name: id,
         status: JobStatus::Received,
         resources: Resource {
-            cpu: 1,
-            memory: 128,
+            cpu: 1.0,
+            memory: 128.0,
         },
         network: vec![],
     }
@@ -123,14 +123,14 @@ fn run_one_job(
     let job = create_job(job_id.clone());
 
     create_configure_runtime()
-        .configure(&state, job.clone())
+        .configure(&state, &job)
         .map_err(|error| format!("Configuration failed: {error:?}"))?;
 
     let runtime = create_runtime();
 
     // Measure only the runtime startup operation.
     let start = Instant::now();
-    let result = runtime.start(&state, job.clone());
+    let result = runtime.start(&state, &job);
     let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
 
     let process = state.get_process(&job.id);
@@ -243,7 +243,7 @@ fn start_runtime_performance_test() {
                     let job = create_job(job_id);
 
                     let configure_result =
-                        create_configure_runtime().configure(&state, job.clone());
+                        create_configure_runtime().configure(&state, &job);
 
                     if let Err(error) = configure_result {
                         barrier.wait();
@@ -254,7 +254,7 @@ fn start_runtime_performance_test() {
                     barrier.wait();
 
                     let start = Instant::now();
-                    let result = runtime.start(&state, job.clone());
+                    let result = runtime.start(&state, &job);
                     let latency_ms = start.elapsed().as_secs_f64() * 1000.0;
 
                     let process = state.get_process(&job.id);

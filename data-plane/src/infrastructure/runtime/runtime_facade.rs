@@ -74,23 +74,35 @@ where
     pub(crate) fn runtime_state(&self) -> &RuntimeState {
         &self.runtime_state
     }
-    pub fn configure(&self, job: Job) -> Result<(), String> {
-        return self.configure_runtime.configure(&self.runtime_state, job);
+    pub fn configure(&self, job: &Job) -> Result<(), String> {
+        return self.configure_runtime.configure(&self.runtime_state, &job);
     }
 
-    pub fn start(&self, job: Job) -> Result<(), String> {
-        return self.start_runtime.start(&self.runtime_state, job);
+    pub fn start(&self, job: &Job) -> Result<(), String> {
+        return self.start_runtime.start(&self.runtime_state, &job);
     }
 
-    pub fn monitor(&self, job: Job) -> Result<RuntimeStates, String> {
+    pub fn monitor(&self, job: &Job) -> Result<RuntimeStates, String> {
         return self.monitor.monitor(&self.runtime_state, job);
     }
 
-    pub fn stop(&self, job: Job) -> Result<(), String> {
-        return self.stop_runtime.stop(&self.runtime_state, job);
+    pub fn stop(&self, job: &Job) -> Result<(), String> {
+        return self.stop_runtime.stop(&self.runtime_state, &job);
     }
 
-    pub fn cleanup(&self, job: Job) -> Result<(), String> {
-        return self.cleanup.cleanup(&self.runtime_state, job);
+    pub fn cleanup(&self, job: &Job) -> Result<(), String> {
+        return self.cleanup.cleanup(&self.runtime_state, &job);
+    }
+    pub fn get_pid(&self, job: &Job) -> Result<u32, String> {
+        let job_id: &str = &job.id;
+        let process = match self.runtime_state.get_process(job_id) {
+            Some(process) => process,
+            None => return Err("Process does not exist!".to_string()),
+        }; 
+        let pid = match process.pid {
+            Some(pid) => pid,
+            None => return Err("Pid does not exist!".to_string()),
+        };
+        return Ok(pid);
     }
 }
