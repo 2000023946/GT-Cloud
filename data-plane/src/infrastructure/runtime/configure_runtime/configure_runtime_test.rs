@@ -54,8 +54,8 @@ fn make_job(command: &str) -> Job {
         name: "test-job".to_string(),
         status: JobStatus::Received,
         resources: Resource {
-            cpu: 0,
-            memory: 0,
+            cpu: 0.0,
+            memory: 0.0,
         },
         network: Vec::<NetworkRule>::new(),
     }
@@ -71,7 +71,7 @@ fn configure_valid_command() {
     let state = make_state();
     let job = make_job("python app.py");
 
-    let result = runtime.configure(&state, job);
+    let result = runtime.configure(&state, &job);
 
     assert!(result.is_ok());
 
@@ -91,7 +91,7 @@ fn configure_command_with_multiple_arguments() {
     let state = make_state();
     let job = make_job("python app.py --port 8080");
 
-    let result = runtime.configure(&state, job);
+    let result = runtime.configure(&state, &job);
 
     assert!(result.is_ok());
 
@@ -110,7 +110,7 @@ fn configure_command_without_arguments() {
     let state = make_state();
     let job = make_job("python");
 
-    let result = runtime.configure(&state, job);
+    let result = runtime.configure(&state, &job);
 
     assert!(result.is_ok());
 
@@ -132,7 +132,7 @@ fn configure_sets_environment() {
         ("MODE".to_string(), "test".to_string()),
     ];
 
-    let result = runtime.configure(&state, job);
+    let result = runtime.configure(&state, &job);
 
     assert!(result.is_ok());
 
@@ -153,7 +153,7 @@ fn configure_empty_command_fails() {
     let state = make_state();
     let job = make_job("");
 
-    let result = runtime.configure(&state, job);
+    let result = runtime.configure(&state, &job);
 
     assert!(result.is_err());
 }
@@ -164,7 +164,7 @@ fn configure_whitespace_command_fails() {
     let state = make_state();
     let job = make_job("   ");
 
-    let result = runtime.configure(&state, job);
+    let result = runtime.configure(&state, &job);
 
     assert!(result.is_err());
 }
@@ -175,10 +175,10 @@ fn configure_replaces_existing_job() {
     let state = make_state();
 
     let job1 = make_job("python app.py");
-    runtime.configure(&state, job1).unwrap();
+    runtime.configure(&state, &job1).unwrap();
 
     let job2 = make_job("node server.js");
-    runtime.configure(&state, job2).unwrap();
+    runtime.configure(&state, &job2).unwrap();
 
     let process = state.get_process("job-123").unwrap();
 
@@ -198,8 +198,8 @@ fn configure_multiple_jobs() {
     let mut job2 = make_job("node server.js");
     job2.id = "job-456".to_string();
 
-    runtime.configure(&state, job1).unwrap();
-    runtime.configure(&state, job2).unwrap();
+    runtime.configure(&state, &job1).unwrap();
+    runtime.configure(&state, &job2).unwrap();
 
     assert_eq!(state.process_count(), 2);
 
