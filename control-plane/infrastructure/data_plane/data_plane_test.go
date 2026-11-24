@@ -3,40 +3,60 @@ package data_plane
 import (
 	"errors"
 	"io"
-	"net/http"
 	"testing"
 
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/ports/application"
 )
 
-// Mock JSON adapter
+// Mock HTTP Adapter
+type mockHttpAdapter struct {
+	response    application.HttpResponse
+	err         error
+	url         string
+	called      bool
+	contentType string
+	body        []byte
+	postErr     error
+}
+
+func (m *mockHttpAdapter) Get(url string) (application.HttpResponse, error) {
+	m.called = true
+	m.url = url
+	return m.response, m.err
+}
+
+func (m *mockHttpAdapter) Post(url string, contentType string, body io.Reader) (application.HttpResponse, error) {
+	m.called = true
+	m.url = url
+	m.contentType = contentType
+
+	if body != nil {
+		m.body, _ = io.ReadAll(body)
+	}
+
+	return m.response, m.postErr
+}
+
+// Mock JSON Adapter
 type mockJsonAdapter struct {
-	marshalErr error
 	payload    []byte
+	err        error
+	called     bool
+	marshalErr error
 }
 
 func (m *mockJsonAdapter) Marshal(content any) ([]byte, error) {
 	return m.payload, m.marshalErr
 }
 
-// Mock HTTP adapter
-type mockHttpAdapter struct {
-	postErr     error
-	called      bool
-	url         string
-	contentType string
-	body        []byte
-}
-
-func (m *mockHttpAdapter) Post(url string, contentType string, body io.Reader) (any, error) {
+func (m *mockJsonAdapter) Unmarshal(data []byte, v any) error {
 	m.called = true
-	m.url = url
-	m.contentType = contentType
-
-	m.body, _ = io.ReadAll(body)
-
-	return &http.Response{StatusCode: http.StatusOK}, m.postErr
+	return m.err
 }
+
+var _ application.IHttpAdapter = (*mockHttpAdapter)(nil)
+var _ application.IJsonAdapter = (*mockJsonAdapter)(nil)
 
 func TestDataPlane_StartJob(t *testing.T) {
 	t.Run("successful start job", func(t *testing.T) {
@@ -125,4 +145,76 @@ func TestDataPlane_StartJob(t *testing.T) {
 			t.Error("expected HTTP Post to be called")
 		}
 	})
+}
+
+func TestDataPlane_GetJobLogs(t *testing.T) {
+	tests := []struct {
+		name           string
+		httpResponse   application.HttpResponse
+		httpError      error
+		jsonError      error
+		expectError    bool
+		expectHTTPCall bool
+	}{
+		{
+			name: "successful GET request",
+			httpResponse: application.HttpResponse{
+				StatusCode: 200,
+				Body:       []byte(`{"stdout":"Job started","stderr":""}`),
+			},
+			expectHTTPCall: true,
+		},
+		{
+			name:           "HTTP request failure",
+			httpError:      errors.New("connection refused"),
+			expectError:    true,
+			expectHTTPCall: true,
+		},
+		{
+			name: "JSON unmarshalling failure",
+			httpResponse: application.HttpResponse{
+				StatusCode: 200,
+				Body:       []byte(`invalid json`),
+			},
+			jsonError:      errors.New("invalid JSON"),
+			expectError:    true,
+			expectHTTPCall: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			httpMock := &mockHttpAdapter{
+				response: tt.httpResponse,
+				err:      tt.httpError,
+			}
+
+			jsonMock := &mockJsonAdapter{
+				err: tt.jsonError,
+			}
+
+			dp := &DataPlane{
+				httpAdapter: httpMock,
+				jsonAdapter: jsonMock,
+			}
+
+			_, err := dp.GetJobLogs("job-123")
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("expected error %v, got %v", tt.expectError, err)
+			}
+
+			if httpMock.called != tt.expectHTTPCall {
+				t.Errorf("expected HTTP call %v, got %v", tt.expectHTTPCall, httpMock.called)
+			}
+
+			if tt.expectHTTPCall && httpMock.url == "" {
+				t.Error("expected a non-empty URL")
+			}
+
+			if tt.expectHTTPCall && httpMock.url == "" {
+				t.Error("expected GET request to be made")
+			}
+		})
+	}
 }

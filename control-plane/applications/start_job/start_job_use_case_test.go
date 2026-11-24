@@ -5,6 +5,7 @@ import (
 	"mime/multipart"
 	"testing"
 
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/job_logs"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/ports/application"
 )
@@ -58,6 +59,10 @@ type mockDataPlane struct {
 func (m *mockDataPlane) StartJob(newService service.Service) error {
 	m.called = true
 	return m.err
+}
+
+func (m *mockDataPlane) GetJobLogs(jobId string) (job_logs.JobLogs, error) {
+	return job_logs.JobLogs{}, nil
 }
 
 // Test use case
