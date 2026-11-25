@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/job_logs"
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/resource"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/ports/application"
 )
@@ -14,6 +15,11 @@ type MockDataPlane struct {
 	err         error
 	called      bool
 	calledJobId string
+}
+
+// GetJobResources implements [application.IDataPlane].
+func (m *MockDataPlane) GetJobResources(jobId string) (resource.Resource, error) {
+	panic("unimplemented")
 }
 
 func (m *MockDataPlane) StartJob(service service.Service) error {

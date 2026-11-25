@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/job_logs"
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/resource"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/ports/application"
 )
@@ -50,6 +51,10 @@ func (m *mockServiceRepository) Create(newService service.Service) error {
 	return m.err
 }
 
+func (m *mockServiceRepository) Get(job_id string) (service.Service, error) {
+	return service.Service{}, nil
+}
+
 // Mock data plane
 type mockDataPlane struct {
 	err    error
@@ -63,6 +68,10 @@ func (m *mockDataPlane) StartJob(newService service.Service) error {
 
 func (m *mockDataPlane) GetJobLogs(jobId string) (job_logs.JobLogs, error) {
 	return job_logs.JobLogs{}, nil
+}
+
+func (m *mockDataPlane) GetJobResources(jobId string) (resource.Resource, error) {
+	return resource.Resource{}, nil
 }
 
 // Test use case

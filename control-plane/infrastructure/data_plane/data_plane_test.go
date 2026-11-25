@@ -5,6 +5,8 @@ import (
 	"io"
 	"testing"
 
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/globals"
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/resource"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/ports/application"
 )
@@ -44,6 +46,7 @@ type mockJsonAdapter struct {
 	err        error
 	called     bool
 	marshalErr error
+	resource   resource.Resource
 }
 
 func (m *mockJsonAdapter) Marshal(content any) ([]byte, error) {
@@ -52,7 +55,17 @@ func (m *mockJsonAdapter) Marshal(content any) ([]byte, error) {
 
 func (m *mockJsonAdapter) Unmarshal(data []byte, v any) error {
 	m.called = true
-	return m.err
+
+	if m.err != nil {
+		return m.err
+	}
+
+	result, ok := v.(*resource.Resource)
+	if ok {
+		*result = m.resource
+	}
+
+	return nil
 }
 
 var _ application.IHttpAdapter = (*mockHttpAdapter)(nil)
@@ -211,10 +224,116 @@ func TestDataPlane_GetJobLogs(t *testing.T) {
 			if tt.expectHTTPCall && httpMock.url == "" {
 				t.Error("expected a non-empty URL")
 			}
-
-			if tt.expectHTTPCall && httpMock.url == "" {
-				t.Error("expected GET request to be made")
-			}
 		})
 	}
+}
+
+func TestDataPlane_GetJobResources(t *testing.T) {
+	t.Run("successful resource retrieval", func(t *testing.T) {
+		jsonAdapter := &mockJsonAdapter{
+			resource: resource.Resource{
+				CPU:    2.5,
+				Memory: 512,
+			},
+		}
+
+		httpAdapter := &mockHttpAdapter{
+			response: application.HttpResponse{
+				StatusCode: 200,
+				Body:       []byte(`{"CPU":2.5,"Memory":512}`),
+			},
+		}
+
+		dataPlane := &DataPlane{
+			jsonAdapter: jsonAdapter,
+			httpAdapter: httpAdapter,
+		}
+
+		result, err := dataPlane.GetJobResources("job-123")
+
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+
+		if result.CPU != 2.5 {
+			t.Errorf("expected CPU 2.5, got %v", result.CPU)
+		}
+
+		if result.Memory != 512 {
+			t.Errorf("expected Memory 512, got %v", result.Memory)
+		}
+
+		if !httpAdapter.called {
+			t.Error("expected HTTP GET to be called")
+		}
+
+		if !jsonAdapter.called {
+			t.Error("expected JSON Unmarshal to be called")
+		}
+
+		expectedURL := globals.DataPlaneUrl + "/job_resources/job-123"
+
+		if httpAdapter.url != expectedURL {
+			t.Errorf("expected URL %q, got %q", expectedURL, httpAdapter.url)
+		}
+	})
+
+	t.Run("HTTP GET returns error", func(t *testing.T) {
+		jsonAdapter := &mockJsonAdapter{}
+
+		httpAdapter := &mockHttpAdapter{
+			err: errors.New("connection failed"),
+		}
+
+		dataPlane := &DataPlane{
+			jsonAdapter: jsonAdapter,
+			httpAdapter: httpAdapter,
+		}
+
+		result, err := dataPlane.GetJobResources("job-123")
+
+		if err == nil {
+			t.Fatal("expected error when HTTP GET fails")
+		}
+
+		if result != (resource.Resource{}) {
+			t.Errorf("expected empty resource, got %+v", result)
+		}
+
+		if jsonAdapter.called {
+			t.Error("JSON Unmarshal should not be called when HTTP GET fails")
+		}
+	})
+
+	t.Run("JSON unmarshal returns error", func(t *testing.T) {
+		jsonAdapter := &mockJsonAdapter{
+			err: errors.New("invalid JSON"),
+		}
+
+		httpAdapter := &mockHttpAdapter{
+			response: application.HttpResponse{
+				StatusCode: 200,
+				Body:       []byte("invalid JSON"),
+			},
+		}
+
+		dataPlane := &DataPlane{
+			jsonAdapter: jsonAdapter,
+			httpAdapter: httpAdapter,
+		}
+
+		result, err := dataPlane.GetJobResources("job-123")
+
+		if err == nil {
+			t.Fatal("expected error when JSON unmarshalling fails")
+		}
+
+		if result != (resource.Resource{}) {
+			t.Errorf("expected empty resource, got %+v", result)
+		}
+
+		if !jsonAdapter.called {
+			t.Error("expected JSON Unmarshal to be called")
+		}
+	})
 }

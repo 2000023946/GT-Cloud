@@ -6,6 +6,7 @@ import (
 
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/globals"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/job_logs"
+	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/resource"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/ports/application"
 )
@@ -44,4 +45,20 @@ func (s *DataPlane) GetJobLogs(jobId string) (job_logs.JobLogs, error) {
 		return job_logs.JobLogs{}, errors.New("Error converting response bytes to Job Logs object")
 	}
 	return jobLogs, nil
+}
+
+func (s *DataPlane) GetJobResources(job_id string) (resource.Resource, error) {
+	result, err := s.httpAdapter.Get(globals.DataPlaneUrl + "/job_resources/" + job_id)
+	if err != nil {
+		return resource.Resource{}, errors.New("Error fetching the job logs!")
+	}
+
+	// unpack the resource
+	var res resource.Resource
+	err = s.jsonAdapter.Unmarshal(result.Body, &res)
+	if err != nil {
+		return resource.Resource{}, errors.New("Error converting response bytes to Job Logs object")
+	}
+
+	return res, nil
 }

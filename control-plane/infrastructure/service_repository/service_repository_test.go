@@ -2,6 +2,7 @@ package service_repository
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -42,6 +43,51 @@ func TestServiceRepository_Create(t *testing.T) {
 	if storedService.ID != newService.ID {
 		t.Errorf("expected ID %s, got %s", newService.ID, storedService.ID)
 	}
+}
+
+func TestServiceRepository_Get(t *testing.T) {
+	t.Run("successful retrieval", func(t *testing.T) {
+		repository := NewServiceRepository()
+
+		newService := service.Service{
+			ID:   "service-1",
+			Name: "test-service",
+		}
+
+		err := repository.Create(newService)
+
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+
+		result, err := repository.Get("service-1")
+
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+
+		if result.ID != newService.ID {
+			t.Errorf("expected ID %s, got %s", newService.ID, result.ID)
+		}
+
+		if result.Name != newService.Name {
+			t.Errorf("expected Name %s, got %s", newService.Name, result.Name)
+		}
+	})
+
+	t.Run("service does not exist", func(t *testing.T) {
+		repository := NewServiceRepository()
+
+		result, err := repository.Get("missing-service")
+
+		if err == nil {
+			t.Fatal("expected error when service does not exist")
+		}
+
+		if !reflect.DeepEqual(result, service.Service{}) {
+			t.Errorf("expected empty service, got %+v", result)
+		}
+	})
 }
 
 func TestServiceRepository_ConcurrentCreate(t *testing.T) {
@@ -113,5 +159,93 @@ func TestServiceRepository_ConcurrentCreateSameID(t *testing.T) {
 
 	if _, exists := repository.storage["shared-service"]; !exists {
 		t.Error("expected shared-service to exist")
+	}
+}
+
+func TestServiceRepository_ConcurrentGet(t *testing.T) {
+	repository := NewServiceRepository()
+
+	const goroutineCount = 100
+
+	for i := 0; i < goroutineCount; i++ {
+		newService := service.Service{
+			ID: fmt.Sprintf("service-%d", i),
+		}
+
+		if err := repository.Create(newService); err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutineCount; i++ {
+		wg.Add(1)
+
+		go func(id int) {
+			defer wg.Done()
+
+			expectedID := fmt.Sprintf("service-%d", id)
+
+			result, err := repository.Get(expectedID)
+
+			if err != nil {
+				t.Errorf("failed to get service %s: %v", expectedID, err)
+				return
+			}
+
+			if result.ID != expectedID {
+				t.Errorf("expected ID %s, got %s", expectedID, result.ID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestServiceRepository_ConcurrentCreateAndGet(t *testing.T) {
+	repository := NewServiceRepository()
+
+	const goroutineCount = 100
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutineCount; i++ {
+		wg.Add(1)
+
+		go func(id int) {
+			defer wg.Done()
+
+			newService := service.Service{
+				ID:   fmt.Sprintf("service-%d", id),
+				Name: fmt.Sprintf("test-service-%d", id),
+			}
+
+			if err := repository.Create(newService); err != nil {
+				t.Errorf("failed to create service: %v", err)
+				return
+			}
+
+			result, err := repository.Get(newService.ID)
+
+			if err != nil {
+				t.Errorf("failed to get service %s: %v", newService.ID, err)
+				return
+			}
+
+			if result.ID != newService.ID {
+				t.Errorf("expected ID %s, got %s", newService.ID, result.ID)
+			}
+
+			if result.Name != newService.Name {
+				t.Errorf("expected Name %s, got %s", newService.Name, result.Name)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	if len(repository.storage) != goroutineCount {
+		t.Errorf("expected %d services, got %d", goroutineCount, len(repository.storage))
 	}
 }
