@@ -5,7 +5,7 @@ pub trait ResourceManager {
 
     fn start(&self, job: &Job, pid: u32) -> Result<(), String>;
 
-    fn monitor(&self, job: &Job) -> Result<ResourceStates, String>;
+    fn monitor(&self, job_id: String) -> Result<ResourceStates, String>;
 
-    fn cleanup(&self, job: &Job) -> Result<(), String>;
+    fn cleanup(&self, job_id: String) -> Result<(), String>;
 }

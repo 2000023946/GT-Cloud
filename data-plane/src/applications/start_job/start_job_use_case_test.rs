@@ -56,11 +56,11 @@ impl ResourceManager for MockResourceManager {
         self.control.record("resource.start")
     }
 
-    fn monitor(&self, _job: &Job) -> Result<ResourceStates, String> {
+    fn monitor(&self, _job: String) -> Result<ResourceStates, String> {
         Err("Not implemented".to_string())
     }
 
-    fn cleanup(&self, _job: &Job) -> Result<(), String> {
+    fn cleanup(&self, _job: String) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
 }
