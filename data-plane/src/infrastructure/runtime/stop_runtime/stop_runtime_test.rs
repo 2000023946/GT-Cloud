@@ -225,8 +225,8 @@ mod tests {
             name: "test-job".to_string(),
             status: JobStatus::Running,
             resources: Resource {
-                cpu: 1,
-                memory: 128,
+                cpu: 1.0,
+                memory: 128.0,
             },
             network: vec![],
         }
@@ -309,7 +309,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_ok());
 
@@ -342,7 +342,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_ok());
 
@@ -377,7 +377,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_ok());
 
@@ -404,7 +404,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_ok());
 
@@ -436,7 +436,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_err());
 
@@ -473,7 +473,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No process found"));
@@ -505,7 +505,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("No PID found"));
@@ -534,7 +534,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid PID"));
@@ -707,7 +707,7 @@ mod tests {
             Some(PID),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_ok());
 
@@ -757,7 +757,7 @@ mod tests {
             MockOsAdapter::new(vec![], vec![]),
         );
 
-        let result = runtime.stop(&state, create_job());
+        let result = runtime.stop(&state, &create_job());
 
         assert!(result.is_err());
 

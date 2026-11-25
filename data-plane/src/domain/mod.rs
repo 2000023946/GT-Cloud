@@ -7,3 +7,4 @@ pub mod resource_states;
 pub mod job_state;
 pub mod runtime_states;
 pub mod network_states;
+pub mod globals;

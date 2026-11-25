@@ -2,9 +2,9 @@
 ///
 /// This is configuration state, not live utilization. Runtime usage is
 /// reported separately through the domain `ResourceState` type.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ResourceAllocation {
-    pub cpu: u32,
-    pub memory: u64,
+    pub cpu: f32,
+    pub memory: f32,
     pub resource_path: String,
 }

@@ -57,8 +57,8 @@ mod tests {
             },
             status: JobStatus::Received,
             resources: Resource {
-                cpu: 1,
-                memory: 128 * 1024 * 1024,
+                cpu: 1.0,
+                memory: (128 * 1024 * 1024) as f32,
             },
             network: vec![],
         }
@@ -111,13 +111,13 @@ mod tests {
 
                 thread::spawn(move || {
                     facade
-                        .configure(job.clone())
+                        .configure(&job)
                         .expect("Concurrent job configuration failed");
 
                     barrier.wait();
 
                     facade
-                        .start(job.clone())
+                        .start(&job)
                         .expect("Concurrent job start failed");
 
                     job
@@ -135,7 +135,7 @@ mod tests {
         // 3. Verify that all jobs are running before introducing failures.
         for job in &started_jobs {
             let status = facade
-                .monitor(job.clone())
+                .monitor(&job)
                 .expect("Initial monitoring failed");
 
             assert!(
@@ -191,7 +191,7 @@ mod tests {
 
                         for attempt in 1..=MAX_MONITOR_ATTEMPTS {
                             let status = facade
-                                .monitor(job.clone())
+                                .monitor(&job)
                                 .expect("Monitoring killed job failed");
 
                             if matches!(
@@ -220,7 +220,7 @@ mod tests {
                     } else {
                         // These jobs should survive the external kill phase.
                         let status = facade
-                            .monitor(job.clone())
+                            .monitor(&job)
                             .expect("Monitoring surviving job failed");
 
                         assert!(
@@ -233,13 +233,13 @@ mod tests {
 
                         // Stop surviving jobs through the normal lifecycle.
                         facade
-                            .stop(job.clone())
+                            .stop(&job)
                             .expect("Stopping surviving job failed");
                     }
 
                     // 5. Every worker cleans up its own job.
                     facade
-                        .cleanup(job.clone())
+                        .cleanup(&job)
                         .expect("Concurrent job cleanup failed");
 
                     job

@@ -62,9 +62,9 @@ where
     pub fn monitor(
         &self,
         state: &RuntimeState,
-        job: Job,
+        job: &Job,
     ) -> Result<RuntimeStates, String> {
-        let job_id = job.id;
+        let job_id = job.id.clone();
 
         self.log_monitoring(&job_id);
         self.record_monitoring_metric();

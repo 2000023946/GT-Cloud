@@ -41,7 +41,7 @@ where
     pub fn start(
         &self,
         state: &RuntimeState,
-        job: Job,
+        job: &Job,
     ) -> Result<(), String> {
         #[cfg(target_os = "linux")]
         {
