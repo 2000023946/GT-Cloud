@@ -27,6 +27,10 @@ func (m *MockServiceRepository) Get(id string) (service.Service, error) {
 	return m.Service, m.GetError
 }
 
+func (m *MockServiceRepository) GetAll() ([]service.Service, error) {
+	return nil, nil
+}
+
 // Mock data plane
 type MockDataPlane struct {
 	Resource       resource.Resource

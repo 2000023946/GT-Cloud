@@ -2,6 +2,8 @@ package service_repository
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.gatech.edu/mabucar3/GT-Cloud/control-plane/domain/service"
@@ -33,4 +35,10 @@ func (s *ServiceRepository) Get(job_id string) (service.Service, error) {
 		return service.Service{}, fmt.Errorf("job %q not found in repository", job_id) // or a sentinel error like ErrNotFound
 	}
 	return job, nil
+}
+
+func (s *ServiceRepository) GetAll() ([]service.Service, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Collect(maps.Values(s.storage)), nil
 }
