@@ -8,4 +8,5 @@ pub trait ResourceManager {
     fn monitor(&self, job_id: String) -> Result<ResourceStates, String>;
 
     fn cleanup(&self, job_id: String) -> Result<(), String>;
+    fn stop(&self, job_id: String) -> Result<(), String>;
 }

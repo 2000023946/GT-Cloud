@@ -86,12 +86,12 @@ where
         return self.monitor.monitor(&self.runtime_state, job);
     }
 
-    pub fn stop(&self, job: &Job) -> Result<(), String> {
-        return self.stop_runtime.stop(&self.runtime_state, &job);
+    pub fn stop(&self, job_id: String) -> Result<(), String> {
+        return self.stop_runtime.stop(&self.runtime_state, job_id);
     }
 
-    pub fn cleanup(&self, job: &Job) -> Result<(), String> {
-        return self.cleanup.cleanup(&self.runtime_state, &job);
+    pub fn cleanup(&self, job_id: String) -> Result<(), String> {
+        return self.cleanup.cleanup(&self.runtime_state, job_id);
     }
     pub fn get_pid(&self, job: &Job) -> Result<u32, String> {
         let job_id: &str = &job.id;

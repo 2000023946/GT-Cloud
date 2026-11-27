@@ -17,8 +17,7 @@ impl<L: Logger, M: Metrics> CleanupRuntime<L, M> {
         Self { telemetry }
     }
 
-    pub fn cleanup(&self, state: &RuntimeState, job: &Job) -> Result<(), String> {
-        let job_id = job.id.clone();
+    pub fn cleanup(&self, state: &RuntimeState, job_id: String) -> Result<(), String> {
 
         state.remove_process(&job_id);
         state.remove_stack(&job_id);

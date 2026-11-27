@@ -154,7 +154,7 @@ mod tests {
 
         // 7. Clean up the terminated job.
         facade
-            .cleanup(&job)
+            .cleanup(job.id.clone())
             .expect("Job cleanup failed");
 
         println!("Job cleanup completed");

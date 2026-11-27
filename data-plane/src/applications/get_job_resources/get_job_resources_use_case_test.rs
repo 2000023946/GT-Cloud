@@ -30,6 +30,10 @@ mod tests {
         fn cleanup(&self, _job_id: String) -> Result<(), String> {
             Ok(())
         }
+
+        fn stop(&self, job_id: String) -> Result<(), String> {
+            Ok(())
+        }
     }
 
     #[test]

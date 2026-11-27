@@ -162,7 +162,7 @@ mod concurrency_tests {
 
                 handles.push(scope.spawn(move || {
                     cleanup
-                        .cleanup(runtime_state, &create_job(&job_id))
+                        .cleanup(runtime_state, create_job(&job_id).id.clone())
                         .unwrap();
                 }));
             }
@@ -209,7 +209,7 @@ mod concurrency_tests {
 
                 handles.push(scope.spawn(move || {
                     cleanup
-                        .cleanup(runtime_state, &create_job(job_id))
+                        .cleanup(runtime_state, create_job(job_id).id.clone())
                         .unwrap();
                 }));
             }
@@ -355,7 +355,7 @@ mod performance_tests {
 
         for i in 0..operations {
             cleanup
-                .cleanup(&state, &create_job(format!("job-{i}")))
+                .cleanup(&state, create_job(format!("job-{i}")).id.clone())
                 .unwrap();
         }
 
@@ -395,7 +395,7 @@ mod performance_tests {
                             );
 
                             cleanup
-                                .cleanup(state, &create_job(job_id))
+                                .cleanup(state, job_id)
                                 .unwrap();
                         }
                     }));

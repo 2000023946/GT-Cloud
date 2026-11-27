@@ -168,7 +168,7 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
 
                 for job in jobs {
                     runtime
-                        .stop(&runtime_state, &job)
+                        .stop(&runtime_state, job.id.clone())
                         .expect("mock stop operation should succeed");
                 }
             }));

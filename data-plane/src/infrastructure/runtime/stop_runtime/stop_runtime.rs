@@ -32,9 +32,8 @@ impl<A: StopRuntimeOsAdapter, L: Logger, M: Metrics>
     pub fn stop(
         &self,
         state: &RuntimeState,
-        job: &Job,
+        job_id: String,
     ) -> Result<(), String> {
-        let job_id = job.id.clone();
         let pid = self.resolve_process_id(state, &job_id)?;
 
         // Request graceful termination.

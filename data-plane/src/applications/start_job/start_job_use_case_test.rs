@@ -63,6 +63,9 @@ impl ResourceManager for MockResourceManager {
     fn cleanup(&self, _job: String) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
+    fn stop(&self, _job: String) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
 }
 
 // Mock runtime manager
@@ -88,11 +91,11 @@ impl Runtime for MockRuntimeManager {
         Err("Not implemented".to_string())
     }
 
-    fn stop(&self, _job: &Job) -> Result<(), String> {
+    fn stop(&self, _job: String) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
 
-    fn cleanup(&self, _job: &Job) -> Result<(), String> {
+    fn cleanup(&self, _job: String) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
 }

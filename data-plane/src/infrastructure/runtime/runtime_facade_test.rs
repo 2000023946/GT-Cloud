@@ -96,13 +96,13 @@ mod tests {
         println!("Job is running");
 
         // 4. Stop
-        facade.stop(&job)
+        facade.stop(job.id.clone())
             .expect("Stopping job failed");
 
         println!("Job stopped");
 
         // 5. Cleanup
-        facade.cleanup(&job)
+        facade.cleanup(job.id.clone())
             .expect("Cleanup failed");
 
         println!("Job cleaned up");

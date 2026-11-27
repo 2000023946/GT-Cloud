@@ -9,7 +9,7 @@ pub trait Runtime {
 
     fn monitor(&self, job: &Job) -> Result<RuntimeStates, String>;
 
-    fn stop(&self, job: &Job) -> Result<(), String>;
+    fn stop(&self, job_id: String) -> Result<(), String>;
 
-    fn cleanup(&self, job: &Job) -> Result<(), String>;
+    fn cleanup(&self, job_id: String) -> Result<(), String>;
 }

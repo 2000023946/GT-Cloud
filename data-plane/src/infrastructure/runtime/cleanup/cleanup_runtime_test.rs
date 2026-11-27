@@ -2,12 +2,8 @@
 mod tests {
     use crate::{
         domain::{
-            app::App,
-            job::{Job, JobStatus},
-            network::NetworkRule,
-            resource::Resource,
-        },
-        infrastructure::runtime::{
+            app::App, job::{self, Job, JobStatus}, network::NetworkRule, resource::Resource,
+        }, infrastructure::runtime::{
             cleanup::{
                 cleanup_runtime::CleanupRuntime,
                 cleanup_runtime_telemetry::CleanupRuntimeTelemetry,
@@ -16,9 +12,7 @@ mod tests {
                 process_state::ProcessState,
                 runtime_state::RuntimeState,
             },
-        },
-        observability::observability::Observability,
-        ports::{logger::Logger, metrics::Metrics},
+        }, observability::observability::Observability, ports::{logger::Logger, metrics::Metrics},
     };
 
     use std::{
@@ -148,7 +142,7 @@ mod tests {
         assert!(runtime_state.contains_process(job_id));
 
         cleanup
-            .cleanup(&runtime_state, &create_job(job_id))
+            .cleanup(&runtime_state, job_id.to_string())
             .unwrap();
 
         assert!(!runtime_state.contains_process(job_id));
@@ -168,7 +162,7 @@ mod tests {
         assert!(runtime_state.contains_stack(job_id));
 
         cleanup
-            .cleanup(&runtime_state, &create_job(job_id))
+            .cleanup(&runtime_state, job_id.to_string())
             .unwrap();
 
         assert!(!runtime_state.contains_stack(job_id));
@@ -197,7 +191,7 @@ mod tests {
         );
 
         cleanup
-            .cleanup(&runtime_state, &create_job(job_id))
+            .cleanup(&runtime_state, job_id.to_string())
             .unwrap();
 
         assert!(!runtime_state.contains_process(job_id));
@@ -210,7 +204,7 @@ mod tests {
             create_cleanup_runtime();
 
         cleanup
-            .cleanup(&runtime_state, &create_job("job-123"))
+            .cleanup(&runtime_state, create_job("job-123").id.clone())
             .unwrap();
 
         let info_calls = logger.info_calls.lock().unwrap();
@@ -245,11 +239,11 @@ mod tests {
         );
 
         cleanup
-            .cleanup(&runtime_state, &create_job(job_id))
+            .cleanup(&runtime_state, job_id.to_string())
             .unwrap();
 
         cleanup
-            .cleanup(&runtime_state, &create_job(job_id))
+            .cleanup(&runtime_state, job_id.to_string())
             .unwrap();
 
         assert!(!runtime_state.contains_stack(job_id));

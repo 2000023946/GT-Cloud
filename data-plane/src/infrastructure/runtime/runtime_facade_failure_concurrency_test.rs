@@ -233,13 +233,13 @@ mod tests {
 
                         // Stop surviving jobs through the normal lifecycle.
                         facade
-                            .stop(&job)
+                            .stop(job.id.clone())
                             .expect("Stopping surviving job failed");
                     }
 
                     // 5. Every worker cleans up its own job.
                     facade
-                        .cleanup(&job)
+                        .cleanup(job.id.clone())
                         .expect("Concurrent job cleanup failed");
 
                     job

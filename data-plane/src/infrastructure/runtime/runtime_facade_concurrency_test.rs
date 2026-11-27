@@ -127,7 +127,7 @@ mod tests {
                     barrier.wait();
 
                     facade
-                        .stop(&job)
+                        .stop(job.id.clone())
                         .expect("Concurrent job stop failed");
 
                     job
@@ -148,7 +148,7 @@ mod tests {
 
                 thread::spawn(move || {
                     facade
-                        .cleanup(&job)
+                        .cleanup(job.id)
                         .expect("Concurrent job cleanup failed");
                 })
             })
