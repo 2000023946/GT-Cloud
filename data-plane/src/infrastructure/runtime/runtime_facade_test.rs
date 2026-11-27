@@ -55,8 +55,8 @@ mod tests {
             status: JobStatus::Received,
 
             resources: Resource {
-                cpu: 1,
-                memory: 128 * 1024 * 1024,
+                cpu: 1.0,
+                memory: (128 * 1024 * 1024) as f32,
             },
 
             network: vec![],
@@ -73,19 +73,19 @@ mod tests {
         let job = create_test_job();
 
         // 1. Configure
-        facade.configure(job.clone())
+        facade.configure(&job)
             .expect("Configuration failed");
 
         println!("Job configured");
 
         // 2. Start
-        facade.start(job.clone())
+        facade.start(&job)
             .expect("Starting job failed");
 
         println!("Job started");
 
         // 3. Monitor
-        let status = facade.monitor(job.clone())
+        let status = facade.monitor(&job)
             .expect("Monitoring failed");
 
         assert!(
@@ -96,13 +96,13 @@ mod tests {
         println!("Job is running");
 
         // 4. Stop
-        facade.stop(job.clone())
+        facade.stop(job.id.clone())
             .expect("Stopping job failed");
 
         println!("Job stopped");
 
         // 5. Cleanup
-        facade.cleanup(job.clone())
+        facade.cleanup(job.id.clone())
             .expect("Cleanup failed");
 
         println!("Job cleaned up");

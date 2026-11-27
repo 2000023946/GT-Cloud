@@ -55,8 +55,8 @@ mod tests {
             },
             status: JobStatus::Received,
             resources: Resource {
-                cpu: 1,
-                memory: 128 * 1024 * 1024,
+                cpu: 1.0,
+                memory: (128 * 1024 * 1024) as f32,
             },
             network: vec![],
         }
@@ -81,13 +81,13 @@ mod tests {
 
                 thread::spawn(move || {
                     facade
-                        .configure(job.clone())
+                        .configure(&job)
                         .expect("Concurrent job configuration failed");
 
                     barrier.wait();
 
                     facade
-                        .start(job.clone())
+                        .start(&job)
                         .expect("Concurrent job start failed");
 
                     job
@@ -103,7 +103,7 @@ mod tests {
         // Verify that every job is independently running.
         for job in &started_jobs {
             let status = facade
-                .monitor(job.clone())
+                .monitor(&job)
                 .expect("Monitoring concurrent job failed");
 
             assert!(
@@ -127,7 +127,7 @@ mod tests {
                     barrier.wait();
 
                     facade
-                        .stop(job.clone())
+                        .stop(job.id.clone())
                         .expect("Concurrent job stop failed");
 
                     job
@@ -148,7 +148,7 @@ mod tests {
 
                 thread::spawn(move || {
                     facade
-                        .cleanup(job.clone())
+                        .cleanup(job.id)
                         .expect("Concurrent job cleanup failed");
                 })
             })

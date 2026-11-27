@@ -1,13 +1,15 @@
 use crate::domain::{job::Job, runtime_states::runtime_states::RuntimeStates};
 
 pub trait Runtime {
-    fn configure(&self, job: Job) -> Result<(), String>;
+    fn configure(&self, job: &Job) -> Result<(), String>;
 
-    fn start(&self, job: Job) -> Result<(), String>;
+    fn get_pid(&self, job: &Job) -> Result<u32, String>;
 
-    fn monitor(&self, job: Job) -> Result<RuntimeStates, String>;
+    fn start(&self, job: &Job) -> Result<(), String>;
 
-    fn stop(&self, job: Job) -> Result<(), String>;
+    fn monitor(&self, job: &Job) -> Result<RuntimeStates, String>;
 
-    fn cleanup(&self, job: Job) -> Result<(), String>;
+    fn stop(&self, job_id: String) -> Result<(), String>;
+
+    fn cleanup(&self, job_id: String) -> Result<(), String>;
 }

@@ -42,7 +42,7 @@ where
             return self.configuration_failed(&job_id, message, started_at);
         }
 
-        if job.resources.cpu == 0 {
+        if job.resources.cpu == 0.0 {
             return self.configuration_failed(
                 &job_id,
                 "CPU allocation must be greater than zero",
@@ -50,7 +50,7 @@ where
             );
         }
 
-        if job.resources.memory == 0 {
+        if job.resources.memory == 0.0 {
             return self.configuration_failed(
                 &job_id,
                 "Memory allocation must be greater than zero",

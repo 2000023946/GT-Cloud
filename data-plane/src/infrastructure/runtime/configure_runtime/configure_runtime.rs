@@ -43,7 +43,7 @@ where
     pub fn configure(
         &self,
         state: &RuntimeState,
-        job: Job,
+        job: &Job,
     ) -> Result<(), String> {
         let job_id = job.id.clone();
 
@@ -97,7 +97,7 @@ where
             program,
             args,
             working_directory: Some(working_directory),
-            environment: job.app.environment,
+            environment: job.app.environment.clone(),
             pid: None,
         };
 

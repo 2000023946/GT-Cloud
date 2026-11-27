@@ -90,7 +90,7 @@ fn make_job(id: &str, cpu: u32, memory: u64) -> Job {
         },
         name: "test-job".to_string(),
         status: JobStatus::Received,
-        resources: Resource { cpu, memory },
+        resources: Resource { cpu: cpu as f32, memory: memory as f32 },
         network: vec![],
     }
 }
@@ -103,8 +103,8 @@ fn configure_stores_valid_allocation() {
     let result = configurer.configure(&mut state, make_job("job-123", 2, 4096));
 
     assert!(result.is_ok());
-    assert_eq!(state.allocations.get("job-123").unwrap().cpu, 2);
-    assert_eq!(state.allocations.get("job-123").unwrap().memory, 4096);
+    assert_eq!(state.allocations.get("job-123").unwrap().cpu, 2.0);
+    assert_eq!(state.allocations.get("job-123").unwrap().memory, 4096.0);
     assert_eq!(
         state.allocations.get("job-123").unwrap().resource_path,
         "/var/lib/gt-cloud/resources/job-123"
@@ -124,8 +124,8 @@ fn configure_stores_multiple_jobs_separately() {
         .unwrap();
 
     assert_eq!(state.allocations.len(), 2);
-    assert_eq!(state.allocations.get("job-1").unwrap().cpu, 1);
-    assert_eq!(state.allocations.get("job-2").unwrap().cpu, 2);
+    assert_eq!(state.allocations.get("job-1").unwrap().cpu, 1.0);
+    assert_eq!(state.allocations.get("job-2").unwrap().cpu, 2.0);
 }
 
 #[test]
@@ -142,8 +142,8 @@ fn configure_replaces_existing_valid_allocation() {
 
     let allocation = state.allocations.get("job-123").unwrap();
     assert_eq!(state.allocations.len(), 1);
-    assert_eq!(allocation.cpu, 4);
-    assert_eq!(allocation.memory, 8192);
+    assert_eq!(allocation.cpu, 4.0);
+    assert_eq!(allocation.memory, 8192.0);
 }
 
 #[test]
@@ -192,8 +192,8 @@ fn failed_reconfiguration_preserves_previous_allocation() {
 
     assert!(result.is_err());
     let allocation = state.allocations.get("job-123").unwrap();
-    assert_eq!(allocation.cpu, 1);
-    assert_eq!(allocation.memory, 1024);
+    assert_eq!(allocation.cpu, 1.0);
+    assert_eq!(allocation.memory, 1024.0);
 }
 
 #[test]

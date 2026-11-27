@@ -33,8 +33,8 @@ fn make_job() -> Job {
         name: "test-job".to_string(),
         status: JobStatus::Running,
         resources: Resource {
-            cpu: 1,
-            memory: 1024,
+            cpu: 1.0,
+            memory: 1024.0,
         },
         network: vec![],
     }
@@ -168,7 +168,7 @@ fn performance_stop_runtime_100k_calls_at_1_4_8_16_threads() {
 
                 for job in jobs {
                     runtime
-                        .stop(&runtime_state, job)
+                        .stop(&runtime_state, job.id.clone())
                         .expect("mock stop operation should succeed");
                 }
             }));

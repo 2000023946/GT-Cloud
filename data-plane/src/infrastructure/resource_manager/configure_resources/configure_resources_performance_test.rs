@@ -55,8 +55,8 @@ fn make_job(id: usize) -> Job {
         name: format!("test-job-{id}"),
         status: JobStatus::Received,
         resources: Resource {
-            cpu: 1,
-            memory: 1024,
+            cpu: 1.0,
+            memory: 1024.0,
         },
         network: vec![],
     }
