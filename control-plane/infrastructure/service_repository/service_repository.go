@@ -42,3 +42,14 @@ func (s *ServiceRepository) GetAll() ([]service.Service, error) {
 	defer s.mu.Unlock()
 	return slices.Collect(maps.Values(s.storage)), nil
 }
+
+func (s *ServiceRepository) Delete(job_id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.storage[job_id]; !exists {
+		return fmt.Errorf("job %s not found", job_id)
+	}
+
+	delete(s.storage, job_id)
+	return nil
+}

@@ -25,6 +25,10 @@ func (m *MockServiceRepository) GetAll() ([]service.Service, error) {
 	return m.services, m.err
 }
 
+func (m *MockServiceRepository) Delete(id string) error {
+	return nil
+}
+
 func TestGetJobsUseCaseExecuteSuccess(t *testing.T) {
 	services := []service.Service{
 		{

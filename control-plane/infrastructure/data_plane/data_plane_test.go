@@ -337,3 +337,55 @@ func TestDataPlane_GetJobResources(t *testing.T) {
 		}
 	})
 }
+
+func TestDataPlane_DeleteJob(t *testing.T) {
+	t.Run("successful job deletion", func(t *testing.T) {
+		httpAdapter := &mockHttpAdapter{}
+
+		dataPlane := &DataPlane{
+			httpAdapter: httpAdapter,
+		}
+
+		err := dataPlane.DeleteJob("job-123")
+
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+
+		if !httpAdapter.called {
+			t.Fatal("expected HTTP GET to be called")
+		}
+
+		expectedURL := globals.DataPlaneUrl + "/delete_job/job-123"
+
+		if httpAdapter.url != expectedURL {
+			t.Errorf("expected URL %q, got %q", expectedURL, httpAdapter.url)
+		}
+	})
+
+	t.Run("HTTP GET returns error", func(t *testing.T) {
+		httpAdapter := &mockHttpAdapter{
+			err: errors.New("connection failed"),
+		}
+
+		dataPlane := &DataPlane{
+			httpAdapter: httpAdapter,
+		}
+
+		err := dataPlane.DeleteJob("job-123")
+
+		if err == nil {
+			t.Fatal("expected error when HTTP GET fails")
+		}
+
+		if !httpAdapter.called {
+			t.Error("expected HTTP GET to be called")
+		}
+
+		expectedURL := globals.DataPlaneUrl + "/delete_job/job-123"
+
+		if httpAdapter.url != expectedURL {
+			t.Errorf("expected URL %q, got %q", expectedURL, httpAdapter.url)
+		}
+	})
+}

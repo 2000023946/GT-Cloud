@@ -32,6 +32,10 @@ func (m *MockDataPlane) GetJobLogs(jobId string) (job_logs.JobLogs, error) {
 	return m.logs, m.err
 }
 
+func (m *MockDataPlane) DeleteJob(jobId string) error {
+	return nil
+}
+
 var _ application.IDataPlane = (*MockDataPlane)(nil)
 
 func TestGetJobLogsUseCaseExecute(t *testing.T) {

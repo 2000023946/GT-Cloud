@@ -31,6 +31,10 @@ func (m *MockServiceRepository) GetAll() ([]service.Service, error) {
 	return nil, nil
 }
 
+func (m *MockServiceRepository) Delete(jobid string) error {
+	return nil
+}
+
 // Mock data plane
 type MockDataPlane struct {
 	Resource       resource.Resource
@@ -51,6 +55,10 @@ func (m *MockDataPlane) GetJobResources(jobId string) (resource.Resource, error)
 	m.GetCalled = true
 	m.RequestedJobID = jobId
 	return m.Resource, m.GetError
+}
+
+func (m *MockDataPlane) DeleteJob(jobId string) error {
+	return nil
 }
 
 var _ repository.IServiceRepository = (*MockServiceRepository)(nil)

@@ -59,6 +59,10 @@ func (m *mockServiceRepository) GetAll() ([]service.Service, error) {
 	return []service.Service{}, nil
 }
 
+func (m *mockServiceRepository) Delete(jobid string) error {
+	return nil
+}
+
 // Mock data plane
 type mockDataPlane struct {
 	err    error
@@ -76,6 +80,10 @@ func (m *mockDataPlane) GetJobLogs(jobId string) (job_logs.JobLogs, error) {
 
 func (m *mockDataPlane) GetJobResources(jobId string) (resource.Resource, error) {
 	return resource.Resource{}, nil
+}
+
+func (m *mockDataPlane) DeleteJob(jobId string) error {
+	return nil
 }
 
 // Test use case

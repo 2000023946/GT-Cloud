@@ -437,3 +437,141 @@ func TestServiceRepository_ConcurrentCreateAndGetAll(t *testing.T) {
 			serviceCount, len(result))
 	}
 }
+
+func TestServiceRepository_Delete(t *testing.T) {
+	t.Run("successful deletion", func(t *testing.T) {
+		repository := NewServiceRepository()
+
+		newService := service.Service{
+			ID:   "service-1",
+			Name: "test-service",
+		}
+
+		if err := repository.Create(newService); err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+
+		err := repository.Delete("service-1")
+
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+
+		_, err = repository.Get("service-1")
+
+		if err == nil {
+			t.Fatal("expected error when retrieving deleted service")
+		}
+	})
+
+	t.Run("service does not exist", func(t *testing.T) {
+		repository := NewServiceRepository()
+
+		err := repository.Delete("missing-service")
+
+		if err == nil {
+			t.Fatal("expected error when deleting nonexistent service")
+		}
+	})
+}
+
+func TestServiceRepository_ConcurrentDelete(t *testing.T) {
+	repository := NewServiceRepository()
+
+	const serviceCount = 100
+
+	for i := 0; i < serviceCount; i++ {
+		newService := service.Service{
+			ID: fmt.Sprintf("service-%d", i),
+		}
+
+		if err := repository.Create(newService); err != nil {
+			t.Fatalf("failed to create service: %v", err)
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < serviceCount; i++ {
+		wg.Add(1)
+
+		go func(id int) {
+			defer wg.Done()
+
+			serviceID := fmt.Sprintf("service-%d", id)
+
+			if err := repository.Delete(serviceID); err != nil {
+				t.Errorf("failed to delete %s: %v", serviceID, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	result, err := repository.GetAll()
+
+	if err != nil {
+		t.Fatalf("failed to get all services: %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected 0 services after deletion, got %d", len(result))
+	}
+}
+
+func TestServiceRepository_ConcurrentDeleteSameID(t *testing.T) {
+	repository := NewServiceRepository()
+
+	if err := repository.Create(service.Service{
+		ID: "shared-service",
+	}); err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	const goroutineCount = 100
+
+	var wg sync.WaitGroup
+	var successCount int
+	var errorCount int
+	var mu sync.Mutex
+
+	for i := 0; i < goroutineCount; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			err := repository.Delete("shared-service")
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err == nil {
+				successCount++
+			} else {
+				errorCount++
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 successful deletion, got %d", successCount)
+	}
+
+	if errorCount != goroutineCount-1 {
+		t.Errorf("expected %d failed deletions, got %d",
+			goroutineCount-1, errorCount)
+	}
+
+	result, err := repository.GetAll()
+
+	if err != nil {
+		t.Fatalf("failed to get all services: %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected empty repository, got %d services", len(result))
+	}
+}

@@ -10,4 +10,5 @@ type IDataPlane interface {
 	StartJob(service service.Service) error
 	GetJobLogs(jobId string) (job_logs.JobLogs, error)
 	GetJobResources(jobId string) (resource.Resource, error)
+	DeleteJob(jobId string) error
 }

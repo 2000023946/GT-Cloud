@@ -62,3 +62,11 @@ func (s *DataPlane) GetJobResources(job_id string) (resource.Resource, error) {
 
 	return res, nil
 }
+
+func (s *DataPlane) DeleteJob(job_id string) error {
+	_, err := s.httpAdapter.Get(globals.DataPlaneUrl + "/delete_job/" + job_id)
+	if err != nil {
+		return errors.New("Error deleting the job!")
+	}
+	return nil
+}
